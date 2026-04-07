@@ -5,7 +5,7 @@ import Header                  from '../components/Header'
 import AuthModal               from '../components/AuthModal'
 import CartSidebar             from '../components/CartSidebar'
 
-const serif = { fontFamily: 'Playfair Display, serif' }
+const serif     = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 
 export default function ShopPage() {
@@ -20,7 +20,7 @@ export default function ShopPage() {
   const [toast, setToast]       = useState('')
   const [loading, setLoading]   = useState(true)
 
-  // ── Bootstrap ────────────────────────────────────────────────────────────
+  // ── Bootstrap ─────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
@@ -32,30 +32,22 @@ export default function ShopPage() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Fetch notifications when user logs in
   useEffect(() => {
     if (!user || isAdmin(user)) return
     fetchNotifs(user.id)
 
-    // Realtime: new notifications
-    const notifChannel = supabase.channel('notifs_' + user.id)
+    const ch = supabase.channel('notifs_' + user.id)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
         filter: `user_id=eq.${user.id}`,
       }, payload => {
         setNotifs(prev => [payload.new, ...prev])
-        toast_show(
-          payload.new.type === 'order'
-            ? '📦 Order update — check notifications!'
-            : '🌿 New farm update!'
-        )
+        toast_show(payload.new.type === 'order' ? '📦 Order update!' : '🌿 New farm update!')
       })
       .subscribe()
-
-    return () => supabase.removeChannel(notifChannel)
+    return () => supabase.removeChannel(ch)
   }, [user])
 
-  // Realtime: product list stays fresh for all visitors
   useEffect(() => {
     const ch = supabase.channel('products_live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, fetchProducts)
@@ -77,7 +69,7 @@ export default function ShopPage() {
     setNotifs(data || [])
   }
 
-  // ── Cart ─────────────────────────────────────────────────────────────────
+  // ── Cart ──────────────────────────────────────────────────────────────────
   function addToCart(prod) {
     if (!user) { setShowAuth(true); return }
     setCart(prev => {
@@ -85,7 +77,7 @@ export default function ShopPage() {
       if (ex) return prev.map(i => i.id === prod.id ? { ...i, qty: i.qty + 1 } : i)
       return [...prev, { ...prod, qty: 1 }]
     })
-    toast_show(prod.emoji + ' ' + prod.name + ' added to cart')
+    toast_show((prod.image_url ? '' : '🌿 ') + prod.name + ' added to cart')
   }
 
   function updateQty(id, qty) {
@@ -118,14 +110,14 @@ export default function ShopPage() {
         setNotifs={setNotifs}
       />
 
-      <main style={{ maxWidth:1120, margin:'0 auto', padding:'28px 20px' }}>
+      <main style={{ maxWidth: 1120, margin: '0 auto', padding: '28px 20px' }}>
 
-        {/* Hero banner */}
+        {/* Hero */}
         <div style={{
-          background:'linear-gradient(130deg, var(--green) 0%, var(--green-l) 100%)',
-          borderRadius:22, padding:'40px 48px', marginBottom:28,
-          color:'#fff', display:'flex', alignItems:'center',
-          justifyContent:'space-between', overflow:'hidden', position:'relative',
+          background: 'linear-gradient(130deg, var(--green) 0%, var(--green-l) 100%)',
+          borderRadius: 22, padding: '40px 48px', marginBottom: 28,
+          color: '#fff', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', overflow: 'hidden', position: 'relative',
         }}>
           <div style={{ position:'absolute', right:40, top:-20, fontSize:160, opacity:0.1 }}>🌾</div>
           <div style={{ position:'relative', maxWidth:480 }}>
@@ -146,7 +138,7 @@ export default function ShopPage() {
               </button>
             )}
           </div>
-          <div style={{ fontSize:88, flexShrink:0, position:'relative' }}>🧺</div>
+          <div style={{ fontSize:88, flexShrink:0 }}>🧺</div>
         </div>
 
         {/* Search + filters */}
@@ -182,45 +174,70 @@ export default function ShopPage() {
               {products.length===0 ? 'No products yet' : 'No matching products'}
             </div>
             <div style={{ fontSize:13 }}>
-              {products.length===0 ? 'Check back soon — harvest season is coming!' : 'Try a different search or category'}
+              {products.length===0 ? 'Check back soon!' : 'Try a different search or category'}
             </div>
           </div>
         ) : (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(210px, 1fr))', gap:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:18 }}>
             {filtered.map(p => (
               <div key={p.id} className="prod-card">
-                <div style={{ background:'var(--green-pale)', height:110,
-                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:56 }}>
-                  {p.emoji}
-                </div>
-                <div style={{ padding:'14px 16px 16px' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                    <span className="pill" style={{ background:'var(--gold-pale)', color:'var(--gold)' }}>
+
+                {/* Product image */}
+                <div style={{ position:'relative', height:180, background:'var(--green-pale)', overflow:'hidden' }}>
+                  {p.image_url
+                    ? <img
+                        src={p.image_url}
+                        alt={p.name}
+                        style={{ width:'100%', height:'100%', objectFit:'cover',
+                          transition:'transform .35s' }}
+                        onMouseEnter={e => e.target.style.transform='scale(1.06)'}
+                        onMouseLeave={e => e.target.style.transform='scale(1)'}
+                      />
+                    : <div style={{ width:'100%', height:'100%', display:'flex',
+                        alignItems:'center', justifyContent:'center', fontSize:64 }}>
+                        🌿
+                      </div>
+                  }
+                  {!p.in_stock && (
+                    <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)',
+                      display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <span style={{ color:'#fff', fontWeight:700, fontSize:14,
+                        background:'rgba(0,0,0,0.6)', padding:'6px 14px', borderRadius:20 }}>
+                        Out of Stock
+                      </span>
+                    </div>
+                  )}
+                  {/* Category pill on image */}
+                  <div style={{ position:'absolute', top:10, left:10 }}>
+                    <span className="pill" style={{ background:'rgba(255,255,255,0.92)', color:'var(--gold)',
+                      boxShadow:'0 1px 6px rgba(0,0,0,0.12)' }}>
                       {p.category}
                     </span>
-                    {!p.in_stock && (
-                      <span className="pill" style={{ background:'var(--red-pale)', color:'var(--red)' }}>
-                        Out of stock
-                      </span>
-                    )}
                   </div>
-                  <div style={{ fontWeight:600, fontSize:15, margin:'6px 0 3px' }}>{p.name}</div>
+                </div>
+
+                {/* Card body */}
+                <div style={{ padding:'14px 16px 16px' }}>
+                  <div style={{ fontWeight:600, fontSize:15, marginBottom:4 }}>{p.name}</div>
                   {p.description && (
-                    <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.5, marginBottom:6 }}>
+                    <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.5, marginBottom:8,
+                      display:'-webkit-box', WebkitLineClamp:2,
+                      WebkitBoxOrient:'vertical', overflow:'hidden' }}>
                       {p.description}
                     </div>
                   )}
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10 }}>
                     <div>
                       <span style={{ ...serif, fontSize:20, fontWeight:700, color:'var(--green)' }}>₹{p.price}</span>
                       <span style={{ fontSize:11, color:'var(--muted)' }}>/{p.unit}</span>
                     </div>
                     <button className="btn-g" style={{ padding:'7px 15px', fontSize:12 }}
                       disabled={!p.in_stock} onClick={() => addToCart(p)}>
-                      {p.in_stock ? '+ Add' : 'Unavailable'}
+                      + Add
                     </button>
                   </div>
                 </div>
+
               </div>
             ))}
           </div>

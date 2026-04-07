@@ -208,7 +208,15 @@ function CartItem({ item, onUpdateQty }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:11,
       padding:'11px 13px', background:'var(--bg)', borderRadius:12 }}>
-      <span style={{ fontSize:26 }}>{item.emoji}</span>
+      <div style={{ width:44, height:44, borderRadius:8, overflow:'hidden',
+        background:'var(--green-pale)', flexShrink:0,
+        display:'flex', alignItems:'center', justifyContent:'center' }}>
+        {item.image_url
+          ? <img src={item.image_url} alt={item.name}
+              style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+          : <span style={{ fontSize:22 }}>{item.emoji || '🌿'}</span>
+        }
+      </div>
       <div style={{ flex:1 }}>
         <div style={{ fontWeight:500, fontSize:13 }}>{item.name}</div>
         <div style={{ fontSize:12, color:'var(--muted)' }}>₹{item.price}/{item.unit}</div>

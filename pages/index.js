@@ -4,6 +4,7 @@ import { supabase, isAdmin }   from '../lib/supabase'
 import Header                  from '../components/Header'
 import AuthModal               from '../components/AuthModal'
 import CartSidebar             from '../components/CartSidebar'
+import { Footer, FloatingWhatsApp } from '../components/Footer'
 
 const serif     = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
@@ -253,6 +254,9 @@ export default function ShopPage() {
           onClearCart={() => setCart([])}
         />
       )}
+
+      <Footer />
+      <FloatingWhatsApp />
 
       {toast && (
         <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)',

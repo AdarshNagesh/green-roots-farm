@@ -3,6 +3,7 @@ import { useRouter }           from 'next/router'
 import Head                    from 'next/head'
 import { supabase }            from '../lib/supabase'
 import Header                  from '../components/Header'
+import { Footer, FloatingWhatsApp } from '../components/Footer'
 
 const serif = { fontFamily: 'Playfair Display, serif' }
 
@@ -219,6 +220,8 @@ export default function OrdersPage() {
           </div>
         )}
       </main>
+      <Footer />
+      <FloatingWhatsApp message="Hi! I have a question about my order." />
     </>
   )
 }

@@ -306,7 +306,7 @@ export default function AdminPage() {
                   Enter the total quantity available. Stock reduces automatically when orders are confirmed. Leave blank for unlimited stock.
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,alignItems:'center'}}>
-                  <input className="inp" type="number" min="0" step="0.5"
+                  <input className="inp" type="number" min="0" step="1"
                     value={form.stock_quantity}
                     onChange={e=>set('stock_quantity',e.target.value)}
                     placeholder="e.g. 60 eggs · 10 chickens · 5 kg" />
@@ -403,50 +403,7 @@ export default function AdminPage() {
 
         {/* ── ORDERS ── */}
         {tab==='orders'&&(
-          <div>
-            <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>All Orders ({orders.length})</div>
-            {orders.length===0
-              ?<div className="card" style={{padding:48,textAlign:'center',color:'var(--muted)'}}>
-                  <div style={{fontSize:36,marginBottom:10}}>📦</div><div style={{fontWeight:600}}>No orders yet</div>
-                </div>
-              :<div style={{display:'flex',flexDirection:'column',gap:12}}>
-                  {orders.map(o=>(
-                    <div key={o.id} className="card" style={{padding:18}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
-                        <div>
-                          <div style={{fontWeight:600,fontSize:15}}>{o.customer_name||o.user_email}</div>
-                          <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>#{o.id.slice(0,8).toUpperCase()} · {new Date(o.created_at).toLocaleString('en-IN')}</div>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>📍 {o.address}</div>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>📞 {o.phone}</div>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>
-                            {o.payment_method==='razorpay'?'💳 Paid Online':'💵 Cash on Delivery'}
-                            {o.payment_status==='paid'&&<span style={{color:'var(--green)',fontWeight:600}}> ✓</span>}
-                          </div>
-                        </div>
-                        <div style={{textAlign:'right'}}>
-                          <div style={{...serif,fontSize:20,fontWeight:700,color:'var(--green)',marginBottom:8}}>₹{Number(o.total).toFixed(2)}</div>
-                          <select value={o.status} disabled={updatingOrder===o.id}
-                            onChange={e=>updateOrderStatus(o,e.target.value)}
-                            style={{padding:'6px 10px',borderRadius:8,border:'1.5px solid var(--green)',
-                              background:'var(--green-pale)',color:'var(--green)',fontWeight:600,fontSize:12,cursor:'pointer',minWidth:160}}>
-                            {ORDER_STATUSES.map(s=><option key={s}>{s}</option>)}
-                          </select>
-                          {updatingOrder===o.id&&<div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Notifying…</div>}
-                        </div>
-                      </div>
-                      <div style={{borderTop:'1px solid var(--border)',paddingTop:10,display:'flex',flexWrap:'wrap',gap:6}}>
-                        {(o.items||[]).map((item,i)=>(
-                          <span key={i} style={{fontSize:12,background:'var(--bg)',padding:'3px 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5}}>
-                            {item.image_url&&<img src={item.image_url} alt="" style={{width:16,height:16,borderRadius:3,objectFit:'cover'}} />}
-                            {item.name}{item.selected_option?` (${item.selected_option})`:''} × {item.qty} — ₹{((item.effective_price??item.price)*item.qty).toFixed(0)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-            }
-          </div>
+          <OrdersTab orders={orders} customers={customers} onUpdateStatus={updateOrderStatus} updatingOrder={updatingOrder} serif={serif} />
         )}
 
         {/* ── CUSTOMERS ── */}
@@ -488,5 +445,182 @@ export default function AdminPage() {
       )}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </>
+  )
+}
+
+// ── Admin Orders Tab with filters ─────────────────────────────────────────────
+function OrdersTab({ orders, customers, onUpdateStatus, updatingOrder, serif }) {
+  const [filterCustomer, setFilterCustomer] = useState('')
+  const [filterProduct,  setFilterProduct]  = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo,   setFilterDateTo]   = useState('')
+  const [filterStatus,   setFilterStatus]   = useState('All')
+
+  // Build unique product names across all orders
+  const allProductNames = [...new Set(
+    orders.flatMap(o => (o.items||[]).map(i => i.name))
+  )].sort()
+
+  // Build unique customer list
+  const allCustomers = [...new Set(
+    orders.map(o => o.customer_name || o.user_email).filter(Boolean)
+  )].sort()
+
+  const filtered = orders.filter(o => {
+    // Customer filter
+    if (filterCustomer) {
+      const name = (o.customer_name || o.user_email || '').toLowerCase()
+      if (!name.includes(filterCustomer.toLowerCase())) return false
+    }
+    // Product filter
+    if (filterProduct) {
+      const hasProduct = (o.items||[]).some(i => i.name === filterProduct)
+      if (!hasProduct) return false
+    }
+    // Date from
+    if (filterDateFrom) {
+      if (new Date(o.created_at) < new Date(filterDateFrom)) return false
+    }
+    // Date to (include full day)
+    if (filterDateTo) {
+      const end = new Date(filterDateTo)
+      end.setHours(23,59,59,999)
+      if (new Date(o.created_at) > end) return false
+    }
+    // Status
+    if (filterStatus !== 'All' && o.status !== filterStatus) return false
+    return true
+  })
+
+  const totalRevenue = filtered.reduce((s,o) => s + Number(o.total), 0)
+  const hasFilters   = filterCustomer || filterProduct || filterDateFrom || filterDateTo || filterStatus !== 'All'
+
+  function clearFilters() {
+    setFilterCustomer(''); setFilterProduct('')
+    setFilterDateFrom(''); setFilterDateTo(''); setFilterStatus('All')
+  }
+
+  return (
+    <div>
+      {/* Filter bar */}
+      <div className="card" style={{padding:'16px 18px',marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div style={{fontWeight:600,fontSize:14}}>🔍 Filter Orders</div>
+          {hasFilters && (
+            <button onClick={clearFilters}
+              style={{fontSize:12,color:'var(--red)',background:'var(--red-pale)',border:'none',
+                borderRadius:8,padding:'4px 12px',cursor:'pointer',fontWeight:500}}>
+              Clear filters
+            </button>
+          )}
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr',gap:10}}>
+          {/* Customer search */}
+          <div>
+            <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>Customer</div>
+            <input className="inp" style={{padding:'7px 10px',fontSize:13}}
+              list="customer-list" placeholder="Search name…"
+              value={filterCustomer} onChange={e=>setFilterCustomer(e.target.value)} />
+            <datalist id="customer-list">
+              {allCustomers.map(c=><option key={c} value={c} />)}
+            </datalist>
+          </div>
+          {/* Product filter */}
+          <div>
+            <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>Product</div>
+            <select className="inp" style={{padding:'7px 10px',fontSize:13}}
+              value={filterProduct} onChange={e=>setFilterProduct(e.target.value)}>
+              <option value="">All products</option>
+              {allProductNames.map(n=><option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          {/* Date from */}
+          <div>
+            <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>From date</div>
+            <input className="inp" type="date" style={{padding:'7px 10px',fontSize:13}}
+              value={filterDateFrom} onChange={e=>setFilterDateFrom(e.target.value)} />
+          </div>
+          {/* Date to */}
+          <div>
+            <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>To date</div>
+            <input className="inp" type="date" style={{padding:'7px 10px',fontSize:13}}
+              value={filterDateTo} onChange={e=>setFilterDateTo(e.target.value)} />
+          </div>
+          {/* Status filter */}
+          <div>
+            <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>Status</div>
+            <select className="inp" style={{padding:'7px 10px',fontSize:13}}
+              value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+              <option value="All">All statuses</option>
+              {['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled'].map(s=>(
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary row */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+        <div style={{fontWeight:600,fontSize:15}}>
+          {hasFilters ? `${filtered.length} of ${orders.length} orders` : `All Orders (${orders.length})`}
+        </div>
+        {filtered.length > 0 && (
+          <div style={{fontSize:13,color:'var(--muted)'}}>
+            Total: <span style={{color:'var(--green)',fontWeight:700}}>₹{totalRevenue.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Orders list */}
+      {filtered.length === 0
+        ? <div className="card" style={{padding:48,textAlign:'center',color:'var(--muted)'}}>
+            <div style={{fontSize:36,marginBottom:10}}>📦</div>
+            <div style={{fontWeight:600}}>{orders.length===0 ? 'No orders yet' : 'No orders match your filters'}</div>
+            {hasFilters && <button onClick={clearFilters} className="btn-o" style={{marginTop:14,padding:'7px 18px',fontSize:13}}>Clear filters</button>}
+          </div>
+        : <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {filtered.map(o=>(
+              <div key={o.id} className="card" style={{padding:18}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:15}}>{o.customer_name||o.user_email}</div>
+                    <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>
+                      #{o.id.slice(0,8).toUpperCase()} · {new Date(o.created_at).toLocaleString('en-IN')}
+                    </div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>📍 {o.address}</div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>📞 {o.phone}</div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>
+                      {o.payment_method==='razorpay'?'💳 Paid Online':'💵 Cash on Delivery'}
+                      {o.payment_status==='paid'&&<span style={{color:'var(--green)',fontWeight:600}}> ✓</span>}
+                    </div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{...serif,fontSize:20,fontWeight:700,color:'var(--green)',marginBottom:8}}>
+                      ₹{Number(o.total).toFixed(2)}
+                    </div>
+                    <select value={o.status} disabled={updatingOrder===o.id}
+                      onChange={e=>onUpdateStatus(o,e.target.value)}
+                      style={{padding:'6px 10px',borderRadius:8,border:'1.5px solid var(--green)',
+                        background:'var(--green-pale)',color:'var(--green)',fontWeight:600,
+                        fontSize:12,cursor:'pointer',minWidth:160}}>
+                      {['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled'].map(s=><option key={s}>{s}</option>)}
+                    </select>
+                    {updatingOrder===o.id&&<div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Notifying…</div>}
+                  </div>
+                </div>
+                <div style={{borderTop:'1px solid var(--border)',paddingTop:10,display:'flex',flexWrap:'wrap',gap:6}}>
+                  {(o.items||[]).map((item,i)=>(
+                    <span key={i} style={{fontSize:12,background:'var(--bg)',padding:'3px 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5}}>
+                      {item.image_url&&<img src={item.image_url} alt="" style={{width:16,height:16,borderRadius:3,objectFit:'cover'}} />}
+                      {item.name}{item.selected_option?` (${item.selected_option})`:''} × {item.qty} — ₹{((item.effective_price??item.price)*item.qty).toFixed(0)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+      }
+    </div>
   )
 }

@@ -30,15 +30,16 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   async function createDBOrder(paymentMethod, paymentStatus) {
     // Normalise cart items for storage — store effective_price explicitly
     const items = cart.map(i => ({
-      id:              i.id,
-      name:            i.name,
-      image_url:       i.image_url || null,
-      price:           i.price,
-      effective_price: i.effective_price ?? i.price,
-      selected_option: i.selected_option || null,
-      unit:            i.unit,
-      qty:             i.qty,
-    }))
+  id:              i.id,
+  name:            i.name,
+  image_url:       i.image_url || null,
+  price:           i.price,
+  effective_price: i.effective_price ?? i.price,
+  selected_option: i.selected_option || null,
+  multiplier:      i.multiplier || 1,        // ← add this line
+  unit:            i.unit,
+  qty:             i.qty,
+}))
     const { data, error: err } = await supabase.from('orders').insert({
       user_id:        user.id,
       user_email:     user.email,

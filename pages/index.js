@@ -8,31 +8,178 @@ import { Footer, FloatingWhatsApp } from '../components/Footer'
 
 const serif      = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
-const LOW_STOCK  = 5   // show "only X left" warning below this
+const LOW_STOCK  = 5
 
-function ProductCard({ product, onAddToCart }) {
-  const opts        = product.quantity_options || []
+// ── Product Detail Modal ──────────────────────────────────────────────────────
+function ProductModal({ product, onClose, onAddToCart }) {
+  const opts = product.quantity_options || []
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   const selectedOpt  = opts[selectedIdx] || null
   const displayPrice = selectedOpt ? product.price * selectedOpt.multiplier : product.price
   const displayLabel = selectedOpt ? selectedOpt.label : `1 ${product.unit}`
 
-  // Stock info
-  const hasStock    = product.stock_quantity !== null && product.stock_quantity !== undefined
-  const stockCount  = product.stock_quantity
-  const isLow       = hasStock && stockCount > 0 && stockCount <= LOW_STOCK
+  const hasStock     = product.stock_quantity !== null && product.stock_quantity !== undefined
+  const stockCount   = product.stock_quantity
+  const isLow        = hasStock && stockCount > 0 && stockCount <= LOW_STOCK
   const isOutOfStock = !product.in_stock || (hasStock && stockCount === 0)
 
+  // Close on Escape key
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   function handleAdd() {
+    if (isOutOfStock) return
+    onAddToCart(product, selectedOpt)
+    onClose()
+  }
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}
+      style={{ alignItems:'center', padding:20 }}>
+      <div style={{
+        background:'var(--card)', borderRadius:20, width:'100%', maxWidth:560,
+        maxHeight:'90vh', overflow:'hidden', display:'flex', flexDirection:'column',
+        boxShadow:'0 24px 64px rgba(0,0,0,0.22)',
+      }}>
+        {/* Image */}
+        <div style={{ position:'relative', height:260, background:'var(--green-pale)', flexShrink:0 }}>
+          {product.image_url
+            ? <img src={product.image_url} alt={product.name}
+                style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+            : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:80 }}>🌿</div>
+          }
+          {/* Close button */}
+          <button onClick={onClose}
+            style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:'50%',
+              background:'rgba(0,0,0,0.55)', color:'#fff', border:'none', cursor:'pointer',
+              fontSize:18, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700 }}>
+            ✕
+          </button>
+          {/* Category + stock badges */}
+          <div style={{ position:'absolute', top:12, left:12, display:'flex', gap:6 }}>
+            <span className="pill" style={{ background:'rgba(255,255,255,0.92)', color:'var(--gold)',
+              boxShadow:'0 1px 6px rgba(0,0,0,0.12)' }}>{product.category}</span>
+            {isLow && !isOutOfStock && (
+              <span className="pill" style={{ background:'rgba(184,125,18,0.9)', color:'#fff', fontSize:10 }}>
+                Only {stockCount} left!
+              </span>
+            )}
+            {isOutOfStock && (
+              <span className="pill" style={{ background:'rgba(184,50,50,0.9)', color:'#fff', fontSize:10 }}>
+                Out of Stock
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Content — scrollable */}
+        <div style={{ padding:'24px 28px 28px', overflowY:'auto', flex:1 }}>
+          <div style={{ ...serif, fontSize:24, fontWeight:700, marginBottom:6 }}>{product.name}</div>
+
+          {/* Price */}
+          <div style={{ display:'flex', alignItems:'baseline', gap:6, marginBottom:16 }}>
+            <span style={{ ...serif, fontSize:28, fontWeight:700, color:'var(--green)' }}>
+              ₹{displayPrice % 1 === 0 ? displayPrice.toFixed(0) : displayPrice.toFixed(2)}
+            </span>
+            <span style={{ fontSize:13, color:'var(--muted)' }}>
+              {opts.length > 0 ? `/ ${displayLabel}` : `/ ${product.unit}`}
+            </span>
+          </div>
+
+          {/* Full description */}
+          {product.description && (
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:12, fontWeight:600, color:'var(--muted)', textTransform:'uppercase',
+                letterSpacing:1, marginBottom:8 }}>About this product</div>
+              <div style={{ fontSize:14, color:'var(--text)', lineHeight:1.8 }}>
+                {product.description}
+              </div>
+            </div>
+          )}
+
+          {/* Stock info */}
+          {hasStock && !isOutOfStock && (
+            <div style={{ marginBottom:16, padding:'10px 14px', background:'var(--green-pale)',
+              borderRadius:10, display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:'var(--green)',
+                display:'inline-block', flexShrink:0 }} />
+              <span style={{ fontSize:13, color:'var(--green)', fontWeight:500 }}>
+                {isLow ? `Only ${stockCount} ${product.unit} remaining — order soon!` : `${stockCount} ${product.unit} available`}
+              </span>
+            </div>
+          )}
+
+          {/* Quantity options */}
+          {opts.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:12, fontWeight:600, color:'var(--muted)', textTransform:'uppercase',
+                letterSpacing:1, marginBottom:10 }}>Select quantity</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                {opts.map((opt, i) => (
+                  <button key={i} onClick={() => setSelectedIdx(i)}
+                    style={{ padding:'8px 18px', borderRadius:24, cursor:'pointer', fontSize:13, fontWeight:500,
+                      border:`2px solid ${selectedIdx===i ? 'var(--green)' : 'var(--border)'}`,
+                      background: selectedIdx===i ? 'var(--green)' : 'transparent',
+                      color: selectedIdx===i ? '#fff' : 'var(--text)', transition:'all .15s' }}>
+                    {opt.label}
+                    <span style={{ fontSize:11, opacity:0.8, marginLeft:5 }}>
+                      ₹{(product.price*opt.multiplier)%1===0
+                        ? (product.price*opt.multiplier).toFixed(0)
+                        : (product.price*opt.multiplier).toFixed(2)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add to cart button */}
+          <button className="btn-g"
+            style={{ width:'100%', padding:'13px', fontSize:16, borderRadius:12 }}
+            disabled={isOutOfStock}
+            onClick={handleAdd}>
+            {isOutOfStock ? 'Currently Unavailable' : `Add to Cart — ₹${displayPrice%1===0?displayPrice.toFixed(0):displayPrice.toFixed(2)}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Product Card ──────────────────────────────────────────────────────────────
+function ProductCard({ product, onAddToCart, onViewDetail }) {
+  const opts         = product.quantity_options || []
+  const [selectedIdx, setSelectedIdx] = useState(0)
+
+  const selectedOpt  = opts[selectedIdx] || null
+  const displayPrice = selectedOpt ? product.price * selectedOpt.multiplier : product.price
+  const displayLabel = selectedOpt ? selectedOpt.label : `1 ${product.unit}`
+
+  const hasStock     = product.stock_quantity !== null && product.stock_quantity !== undefined
+  const stockCount   = product.stock_quantity
+  const isLow        = hasStock && stockCount > 0 && stockCount <= LOW_STOCK
+  const isOutOfStock = !product.in_stock || (hasStock && stockCount === 0)
+
+  // Check if description is long enough to need "read more"
+  const LIMIT        = 60
+  const descLong     = product.description && product.description.length > LIMIT
+  const descPreview  = descLong ? product.description.slice(0, LIMIT).trimEnd() + '…' : product.description
+
+  function handleAdd(e) {
+    e.stopPropagation()
     if (isOutOfStock) return
     onAddToCart(product, selectedOpt)
   }
 
   return (
     <div className="prod-card">
-      {/* Image */}
-      <div style={{ position:'relative', height:180, background:'var(--green-pale)', overflow:'hidden' }}>
+      {/* Image — click opens modal */}
+      <div style={{ position:'relative', height:180, background:'var(--green-pale)', overflow:'hidden', cursor:'pointer' }}
+        onClick={() => onViewDetail(product)}>
         {product.image_url
           ? <img src={product.image_url} alt={product.name}
               style={{ width:'100%', height:'100%', objectFit:'cover', transition:'transform .35s' }}
@@ -51,11 +198,9 @@ function ProductCard({ product, onAddToCart }) {
           <span className="pill" style={{ background:'rgba(255,255,255,0.92)', color:'var(--gold)',
             boxShadow:'0 1px 6px rgba(0,0,0,0.12)' }}>{product.category}</span>
         </div>
-        {/* Low stock badge on image */}
         {isLow && !isOutOfStock && (
           <div style={{ position:'absolute', top:10, right:10 }}>
-            <span className="pill" style={{ background:'rgba(184,125,18,0.9)', color:'#fff',
-              fontSize:10, boxShadow:'0 1px 6px rgba(0,0,0,0.2)' }}>
+            <span className="pill" style={{ background:'rgba(184,125,18,0.9)', color:'#fff', fontSize:10 }}>
               Only {stockCount} left!
             </span>
           </div>
@@ -64,15 +209,27 @@ function ProductCard({ product, onAddToCart }) {
 
       {/* Card body */}
       <div style={{ padding:'14px 16px 16px' }}>
-        <div style={{ fontWeight:600, fontSize:15, marginBottom:4 }}>{product.name}</div>
+        {/* Name — click opens modal */}
+        <div style={{ fontWeight:600, fontSize:15, marginBottom:4, cursor:'pointer' }}
+          onClick={() => onViewDetail(product)}>
+          {product.name}
+        </div>
+
+        {/* Description with Read more */}
         {product.description && (
-          <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.5, marginBottom:8,
-            display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
-            {product.description}
+          <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.5, marginBottom:8 }}>
+            {descPreview}
+            {descLong && (
+              <button onClick={() => onViewDetail(product)}
+                style={{ background:'none', border:'none', cursor:'pointer', color:'var(--green)',
+                  fontSize:12, fontWeight:600, padding:0, marginLeft:3 }}>
+                Read more
+              </button>
+            )}
           </div>
         )}
 
-        {/* Stock indicator (when tracked but not low) */}
+        {/* Stock indicator */}
         {hasStock && !isLow && !isOutOfStock && (
           <div style={{ fontSize:11, color:'var(--green)', fontWeight:500, marginBottom:8,
             display:'flex', alignItems:'center', gap:4 }}>
@@ -88,7 +245,7 @@ function ProductCard({ product, onAddToCart }) {
               textTransform:'uppercase', letterSpacing:0.5 }}>Select quantity</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
               {opts.map((opt, i) => (
-                <button key={i} onClick={() => setSelectedIdx(i)}
+                <button key={i} onClick={e => { e.stopPropagation(); setSelectedIdx(i) }}
                   style={{ padding:'5px 11px', borderRadius:20, cursor:'pointer', fontSize:12, fontWeight:500,
                     border:`1.5px solid ${selectedIdx===i ? 'var(--green)' : 'var(--border)'}`,
                     background: selectedIdx===i ? 'var(--green)' : 'transparent',
@@ -100,8 +257,8 @@ function ProductCard({ product, onAddToCart }) {
           </div>
         )}
 
-        {/* Price + Add button */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop: opts.length>0 ? 4 : 12 }}>
+        {/* Price + Add */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop: opts.length>0 ? 4 : 8 }}>
           <div>
             <span style={{ ...serif, fontSize:20, fontWeight:700, color:'var(--green)' }}>
               ₹{displayPrice % 1 === 0 ? displayPrice.toFixed(0) : displayPrice.toFixed(2)}
@@ -120,17 +277,19 @@ function ProductCard({ product, onAddToCart }) {
   )
 }
 
+// ── Main Shop Page ────────────────────────────────────────────────────────────
 export default function ShopPage() {
-  const [user, setUser]         = useState(null)
-  const [products, setProducts] = useState([])
-  const [cart, setCart]         = useState([])
-  const [notifs, setNotifs]     = useState([])
-  const [filter, setFilter]     = useState('All')
-  const [search, setSearch]     = useState('')
-  const [showAuth, setShowAuth] = useState(false)
-  const [showCart, setShowCart] = useState(false)
-  const [toast, setToast]       = useState('')
-  const [loading, setLoading]   = useState(true)
+  const [user, setUser]           = useState(null)
+  const [products, setProducts]   = useState([])
+  const [cart, setCart]           = useState([])
+  const [notifs, setNotifs]       = useState([])
+  const [filter, setFilter]       = useState('All')
+  const [search, setSearch]       = useState('')
+  const [showAuth, setShowAuth]   = useState(false)
+  const [showCart, setShowCart]   = useState(false)
+  const [modalProduct, setModalProduct] = useState(null)   // product detail modal
+  const [toast, setToast]         = useState('')
+  const [loading, setLoading]     = useState(true)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => setUser(session?.user??null))
@@ -150,7 +309,6 @@ export default function ShopPage() {
   },[user])
 
   useEffect(()=>{
-    // Realtime: refresh product list when stock changes or new product added
     const ch=supabase.channel('products_live')
       .on('postgres_changes',{ event:'*',schema:'public',table:'products' },fetchProducts)
       .subscribe()
@@ -175,14 +333,13 @@ export default function ShopPage() {
     setCart(prev=>{
       const ex=prev.find(i=>i.cartKey===cartKey)
       if(ex) return prev.map(i=>i.cartKey===cartKey?{...i,qty:i.qty+1}:i)
-      return [...prev, {
-  ...prod,
-  cartKey,
-  effective_price: parseFloat(effectivePrice.toFixed(2)),
-  selected_option: optionLabel,
-  multiplier:      selectedOpt ? selectedOpt.multiplier : 1,   // ← add this line
-  qty: 1,
-}]
+      return [...prev,{
+        ...prod, cartKey,
+        effective_price: parseFloat(effectivePrice.toFixed(2)),
+        selected_option: optionLabel,
+        multiplier:      selectedOpt ? selectedOpt.multiplier : 1,
+        qty: 1,
+      }]
     })
     toast_show(prod.name+(optionLabel?` (${optionLabel})`:'') + ' added to cart')
   }
@@ -259,7 +416,7 @@ export default function ShopPage() {
           </div>
         </div>
 
-        {/* Products */}
+        {/* Products grid */}
         {loading ? (
           <div style={{ textAlign:'center', padding:'80px 20px', color:'var(--muted)' }}>
             <div style={{ fontSize:36, marginBottom:12 }}>🌱</div>Loading fresh produce…
@@ -274,13 +431,26 @@ export default function ShopPage() {
           </div>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:18 }}>
-            {filtered.map(p=><ProductCard key={p.id} product={p} onAddToCart={addToCart} />)}
+            {filtered.map(p=>(
+              <ProductCard key={p.id} product={p}
+                onAddToCart={addToCart}
+                onViewDetail={setModalProduct} />
+            ))}
           </div>
         )}
       </main>
 
       <Footer />
       <FloatingWhatsApp />
+
+      {/* Product detail modal */}
+      {modalProduct && (
+        <ProductModal
+          product={modalProduct}
+          onClose={() => setModalProduct(null)}
+          onAddToCart={(prod, opt) => { addToCart(prod, opt) }}
+        />
+      )}
 
       {showAuth && <AuthModal onClose={()=>setShowAuth(false)} />}
       {showCart && (

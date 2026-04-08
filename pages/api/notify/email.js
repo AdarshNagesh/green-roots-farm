@@ -18,11 +18,11 @@ export default async function handler(req, res) {
   ).join('')
 
   const subjects = {
-    confirmed:  `✅ Order Confirmed — Green Roots Farm`,
-    preparing:  `🌿 Your order is being packed — Green Roots Farm`,
-    delivering: `🚚 Out for delivery — Green Roots Farm`,
-    delivered:  `🎉 Order Delivered — Green Roots Farm`,
-    cancelled:  `❌ Order Cancelled — Green Roots Farm`,
+    confirmed:  `✅ Order Confirmed — Adarshini Organic Farm`,
+    preparing:  `🌿 Your order is being packed — Adarshini Organic Farm`,
+    delivering: `🚚 Out for delivery — Adarshini Organic Farm`,
+    delivered:  `🎉 Order Delivered — Adarshini Organic Farm`,
+    cancelled:  `❌ Order Cancelled — Adarshini Organic Farm`,
   }
 
   const banners = {
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     <!-- Header -->
     <div style="background:${b.color};padding:28px 32px;text-align:center">
       <div style="font-size:40px;margin-bottom:8px">${b.icon}</div>
-      <div style="color:#fff;font-size:22px;font-weight:700">Green Roots Farm</div>
+      <div style="color:#fff;font-size:22px;font-weight:700">Adarshini Organic Farm</div>
       <div style="color:rgba(255,255,255,0.85);font-size:14px;margin-top:4px">${b.text}</div>
     </div>
     <!-- Body -->
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     </div>
     <!-- Footer -->
     <div style="background:#f5f0e6;padding:18px 32px;text-align:center;font-size:12px;color:#687165;border-top:1px solid #d8cfbc">
-      Questions? Reply to this email or call us. &nbsp;·&nbsp; Green Roots Farm 🌿
+      Questions? Reply to this email or call us. &nbsp;·&nbsp; Adarshini Organic Farm 🌿
     </div>
   </div>
 </body>

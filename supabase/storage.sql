@@ -40,3 +40,7 @@ CREATE POLICY "Admin can delete product images"
     bucket_id = 'product-images'
     AND public.is_admin()
   );
+
+-- ── Quantity options column (run if upgrading from v3) ─────────────────────
+ALTER TABLE public.products
+  ADD COLUMN IF NOT EXISTS quantity_options jsonb DEFAULT NULL;

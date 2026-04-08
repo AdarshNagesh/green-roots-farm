@@ -12,7 +12,7 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   const [error, setError]       = useState('')
   const [rzpReady, setRzpReady] = useState(false)
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0)
+  const total = cart.reduce((s, i) => s + (i.effective_price ?? i.price) * i.qty, 0)
   const count = cart.reduce((s, i) => s + i.qty, 0)
 
   useEffect(() => {
@@ -28,13 +28,24 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
 
   async function createDBOrder(paymentMethod, paymentStatus) {
+    // Normalise cart items for storage — store effective_price explicitly
+    const items = cart.map(i => ({
+      id:              i.id,
+      name:            i.name,
+      image_url:       i.image_url || null,
+      price:           i.price,
+      effective_price: i.effective_price ?? i.price,
+      selected_option: i.selected_option || null,
+      unit:            i.unit,
+      qty:             i.qty,
+    }))
     const { data, error: err } = await supabase.from('orders').insert({
       user_id:        user.id,
       user_email:     user.email,
       customer_name:  form.name,
       address:        form.address,
       phone:          form.phone,
-      items:          cart,
+      items,
       total,
       status:         paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
       payment_status: paymentStatus,
@@ -219,11 +230,14 @@ function CartItem({ item, onUpdateQty }) {
       </div>
       <div style={{ flex:1 }}>
         <div style={{ fontWeight:500, fontSize:13 }}>{item.name}</div>
-        <div style={{ fontSize:12, color:'var(--muted)' }}>₹{item.price}/{item.unit}</div>
+        <div style={{ fontSize:12, color:'var(--muted)' }}>
+          {item.selected_option || `₹${item.price}/${item.unit}`}
+          {item.selected_option && ` · ₹${(item.effective_price??item.price).toFixed(0)}`}
+        </div>
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:5 }}>
         {['−','+'].map((sym,i) => (
-          <button key={sym} onClick={() => onUpdateQty(item.id, item.qty+(i===0?-1:1))}
+          <button key={sym} onClick={() => onUpdateQty(item.cartKey || item.id, item.qty+(i===0?-1:1))}
             style={{ width:26,height:26,borderRadius:7,border:'1px solid var(--border)',
               background:'var(--card)',cursor:'pointer',fontSize:15,
               display:'flex',alignItems:'center',justifyContent:'center' }}>{sym}</button>
@@ -231,7 +245,7 @@ function CartItem({ item, onUpdateQty }) {
         <span style={{ fontSize:13,fontWeight:600,minWidth:22,textAlign:'center',margin:'0 2px' }}>{item.qty}</span>
       </div>
       <div style={{ fontWeight:700,fontSize:13,minWidth:48,textAlign:'right',color:'var(--green)' }}>
-        ₹{(item.price*item.qty).toFixed(0)}
+        ₹{((item.effective_price??item.price)*item.qty).toFixed(0)}
       </div>
     </div>
   )

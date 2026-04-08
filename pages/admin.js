@@ -306,7 +306,7 @@ export default function AdminPage() {
                   Enter the total quantity available. Stock reduces automatically when orders are confirmed. Leave blank for unlimited stock.
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,alignItems:'center'}}>
-                  <input className="inp" type="number" min="0" step="1"
+                  <input className="inp" type="number" min="0" step="0.5"
                     value={form.stock_quantity}
                     onChange={e=>set('stock_quantity',e.target.value)}
                     placeholder="e.g. 60 eggs · 10 chickens · 5 kg" />

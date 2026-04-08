@@ -175,7 +175,14 @@ export default function ShopPage() {
     setCart(prev=>{
       const ex=prev.find(i=>i.cartKey===cartKey)
       if(ex) return prev.map(i=>i.cartKey===cartKey?{...i,qty:i.qty+1}:i)
-      return [...prev,{ ...prod, cartKey, effective_price:parseFloat(effectivePrice.toFixed(2)), selected_option:optionLabel, qty:1 }]
+      return [...prev, {
+  ...prod,
+  cartKey,
+  effective_price: parseFloat(effectivePrice.toFixed(2)),
+  selected_option: optionLabel,
+  multiplier:      selectedOpt ? selectedOpt.multiplier : 1,   // ← add this line
+  qty: 1,
+}]
     })
     toast_show(prod.name+(optionLabel?` (${optionLabel})`:'') + ' added to cart')
   }

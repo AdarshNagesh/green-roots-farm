@@ -329,24 +329,58 @@ export default function ShopPage() {
     if (!user) { setShowAuth(true); return }
     const effectivePrice = selectedOpt ? prod.price * selectedOpt.multiplier : prod.price
     const optionLabel    = selectedOpt ? selectedOpt.label : null
+    const multiplier     = selectedOpt ? selectedOpt.multiplier : 1
     const cartKey        = prod.id + (optionLabel ? '_' + optionLabel : '')
-    setCart(prev=>{
-      const ex=prev.find(i=>i.cartKey===cartKey)
-      if(ex) return prev.map(i=>i.cartKey===cartKey?{...i,qty:i.qty+1}:i)
-      return [...prev,{
+
+    setCart(prev => {
+      const ex = prev.find(i => i.cartKey === cartKey)
+      const currentQtyInCart = ex ? ex.qty : 0
+
+      // Stock check — only if stock is tracked
+      if (prod.stock_quantity !== null && prod.stock_quantity !== undefined) {
+        // Total stock units already in cart for this product (all options combined)
+        const allCartUnitsForProd = prev
+          .filter(i => i.id === prod.id)
+          .reduce((s, i) => s + (i.qty * (i.multiplier || 1)), 0)
+        const newUnits = allCartUnitsForProd + multiplier
+        if (newUnits > prod.stock_quantity) {
+          toast_show(`Only ${prod.stock_quantity} ${prod.unit} available — can't add more`)
+          return prev // no change
+        }
+      }
+
+      if (ex) return prev.map(i => i.cartKey === cartKey ? { ...i, qty: i.qty + 1 } : i)
+      return [...prev, {
         ...prod, cartKey,
         effective_price: parseFloat(effectivePrice.toFixed(2)),
         selected_option: optionLabel,
-        multiplier:      selectedOpt ? selectedOpt.multiplier : 1,
+        multiplier,
         qty: 1,
       }]
     })
-    toast_show(prod.name+(optionLabel?` (${optionLabel})`:'') + ' added to cart')
+    toast_show(prod.name + (optionLabel ? ` (${optionLabel})` : '') + ' added to cart')
   }
 
   function updateQty(cartKey, qty) {
-    if (qty<1) setCart(prev=>prev.filter(i=>i.cartKey!==cartKey))
-    else       setCart(prev=>prev.map(i=>i.cartKey===cartKey?{...i,qty}:i))
+    if (qty < 1) { setCart(prev => prev.filter(i => i.cartKey !== cartKey)); return }
+
+    setCart(prev => {
+      const item = prev.find(i => i.cartKey === cartKey)
+      if (!item) return prev
+
+      // Stock check when increasing qty
+      if (qty > item.qty && item.stock_quantity !== null && item.stock_quantity !== undefined) {
+        const allCartUnitsForProd = prev
+          .filter(i => i.id === item.id)
+          .reduce((s, i) => s + (i.cartKey === cartKey ? qty * (i.multiplier||1) : i.qty * (i.multiplier||1)), 0)
+        if (allCartUnitsForProd > item.stock_quantity) {
+          toast_show(`Only ${item.stock_quantity} ${item.unit} available`)
+          return prev // block increase
+        }
+      }
+
+      return prev.map(i => i.cartKey === cartKey ? { ...i, qty } : i)
+    })
   }
 
   function toast_show(msg) { setToast(msg); setTimeout(()=>setToast(''),3000) }

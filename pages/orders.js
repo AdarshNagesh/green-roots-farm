@@ -4,8 +4,10 @@ import Head                    from 'next/head'
 import { supabase }            from '../lib/supabase'
 import Header                  from '../components/Header'
 import { Footer, FloatingWhatsApp } from '../components/Footer'
+import Pagination              from '../components/Pagination'
 
-const serif = { fontFamily: 'Playfair Display, serif' }
+const serif    = { fontFamily: 'Playfair Display, serif' }
+const PER_PAGE = 5
 
 const STATUS_STEPS = ['Confirmed','Preparing','Out for Delivery','Delivered']
 const STATUS_ICONS = {
@@ -44,6 +46,10 @@ export default function OrdersPage() {
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo,   setFilterDateTo]   = useState('')
   const [filterStatus,   setFilterStatus]   = useState('All')
+  const [page, setPage] = useState(1)
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1) }, [filterProduct, filterDateFrom, filterDateTo, filterStatus])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => {
@@ -105,7 +111,10 @@ export default function OrdersPage() {
 
   function clearFilters() {
     setFilterProduct(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterStatus('All')
+    setPage(1)
   }
+
+  const pagedOrders = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   const stepIndex = (status) => STATUS_STEPS.indexOf(status)
 
@@ -145,7 +154,7 @@ export default function OrdersPage() {
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>Product</div>
                 <select className="inp" style={{ padding:'7px 10px', fontSize:13 }}
-                  value={filterProduct} onChange={e=>setFilterProduct(e.target.value)}>
+                  value={filterProduct} onChange={e=>{ setFilterProduct(e.target.value); setPage(1) }}>
                   <option value="">All products</option>
                   {allProductNames.map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
@@ -156,7 +165,7 @@ export default function OrdersPage() {
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>From date</div>
                 <input className="inp" type="date" style={{ padding:'7px 10px', fontSize:13 }}
-                  value={filterDateFrom} onChange={e=>setFilterDateFrom(e.target.value)} />
+                  value={filterDateFrom} onChange={e=>{ setFilterDateFrom(e.target.value); setPage(1) }} />
               </div>
 
               {/* Date to */}
@@ -164,7 +173,7 @@ export default function OrdersPage() {
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>To date</div>
                 <input className="inp" type="date" style={{ padding:'7px 10px', fontSize:13 }}
-                  value={filterDateTo} onChange={e=>setFilterDateTo(e.target.value)} />
+                  value={filterDateTo} onChange={e=>{ setFilterDateTo(e.target.value); setPage(1) }} />
               </div>
 
               {/* Status */}
@@ -172,7 +181,7 @@ export default function OrdersPage() {
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>Status</div>
                 <select className="inp" style={{ padding:'7px 10px', fontSize:13 }}
-                  value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+                  value={filterStatus} onChange={e=>{ setFilterStatus(e.target.value); setPage(1) }}>
                   <option value="All">All statuses</option>
                   {['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled','Payment Pending'].map(s=>(
                     <option key={s}>{s}</option>
@@ -213,7 +222,7 @@ export default function OrdersPage() {
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-            {filtered.map(order => {
+            {pagedOrders.map(order => {
               const isExpanded  = expanded === order.id
               const isCancelled = order.status === 'Cancelled'
               const isPending   = order.status === 'Payment Pending'
@@ -293,8 +302,16 @@ export default function OrdersPage() {
 
                   {isCancelled && (
                     <div style={{ padding:'0 20px 16px' }}>
-                      <div style={{ background:'var(--red-pale)', color:'var(--red)', padding:'10px 14px', borderRadius:9, fontSize:13 }}>
-                        ❌ This order was cancelled. Contact us if you have questions.
+                      <div style={{ background:'var(--red-pale)', color:'var(--red)', padding:'12px 14px', borderRadius:9, fontSize:13, lineHeight:1.6 }}>
+                        ❌ This order was cancelled.
+                        {order.cancel_reason && (
+                          <div style={{ marginTop:6, fontWeight:600 }}>
+                            Reason: <span style={{ fontWeight:400 }}>{order.cancel_reason}</span>
+                          </div>
+                        )}
+                        <div style={{ marginTop:6, fontSize:12, opacity:0.8 }}>
+                          Contact us if you have any questions.
+                        </div>
                       </div>
                     </div>
                   )}
@@ -350,6 +367,11 @@ export default function OrdersPage() {
             })}
           </div>
         )}
+
+        {/* Pagination */}
+        <Pagination page={page} total={filtered.length} perPage={PER_PAGE}
+          onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+
       </main>
 
       <Footer />

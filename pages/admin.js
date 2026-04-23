@@ -136,6 +136,10 @@ export default function AdminPage() {
         : await supabase.from('products').insert(payload)
       if(error) throw error
       showToast(editing?'✅ Updated — customers notified!':'✅ Added — customers notified!')
+      await notifyCustomersOfProduct(
+  { ...payload, emoji: form.emoji || '🌿', name: form.name },
+  !editing  // true = new product, false = update
+)
       resetForm(); loadAll()
     } catch(e) { showToast('Error: '+e.message) }
     finally { setSaving(false); setUploading(false) }

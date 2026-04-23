@@ -5,6 +5,7 @@ import { supabase, isAdmin }           from '../lib/supabase'
 import { sendOrderNotifications }      from '../lib/notifications'
 import Header                          from '../components/Header'
 import Pagination                      from '../components/Pagination'
+import { notifyCustomersOfProduct } from '../lib/productNotify'
 
 const serif = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES     = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']

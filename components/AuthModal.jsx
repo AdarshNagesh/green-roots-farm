@@ -34,7 +34,7 @@ export default function AuthModal({ onClose, onSuccess }) {
       } else if (mode === 'forgot') {
         if (!form.email) throw new Error('Please enter your email address')
         const { error } = await supabase.auth.resetPasswordForEmail(form.email, {
-          redirectTo: `${window.location.origin}/reset-password`,
+          redirectTo: `https://green-roots-farm.vercel.app/reset-password`,
         })
         if (error) throw error
         setSuccess('Password reset link sent! Check your email inbox.')

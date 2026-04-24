@@ -135,11 +135,13 @@ export default function Header({ user, cartCount, onCartOpen, onAuthOpen, notifs
 
         {user ? (
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <div style={{ width:32, height:32, borderRadius:'50%', background:'var(--green-pale)',
-              display:'flex', alignItems:'center', justifyContent:'center',
-              color:'var(--green)', fontWeight:700, fontSize:13 }}>
-              {(user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
-            </div>
+           <div onClick={() => router.push('/profile')}
+  style={{ width:32, height:32, borderRadius:'50%', background:'var(--green-pale)',
+    display:'flex', alignItems:'center', justifyContent:'center',
+    color:'var(--green)', fontWeight:700, fontSize:13, cursor:'pointer' }}
+  title="Edit Profile">
+  {(user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
+</div>
             <span style={{ fontSize:13, color:'var(--muted)', maxWidth:90,
               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {(user.user_metadata?.name || user.email).split(' ')[0]}

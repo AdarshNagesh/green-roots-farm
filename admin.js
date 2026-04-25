@@ -4,14 +4,17 @@ import Head                            from 'next/head'
 import { supabase, isAdmin }           from '../lib/supabase'
 import { sendOrderNotifications }      from '../lib/notifications'
 import Header                          from '../components/Header'
+import Pagination                      from '../components/Pagination'
+import { notifyCustomersOfProduct }    from '../lib/productNotify'
 
 const serif = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES     = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const UNITS          = ['kg','g','piece','bunch','dozen','litre','pack','box']
 const BUCKET         = 'product-images'
 const ORDER_STATUSES = ['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled']
-const BLANK          = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, quantity_options:[], stock_quantity:'' }
+const BLANK          = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'' }
 const LOW_STOCK      = 5
+const PER_PAGE       = { products:10, orders:8, customers:10 }
 
 const PRESETS = {
   'kg options':    [{ label:'250g', multiplier:0.25 },{ label:'500g', multiplier:0.5 },{ label:'1 kg', multiplier:1 },{ label:'2 kg', multiplier:2 }],
@@ -25,7 +28,6 @@ export default function AdminPage() {
   const router  = useRouter()
   const fileRef = useRef(null)
 
-  // Core state
   const [user, setUser]                   = useState(null)
   const [products, setProducts]           = useState([])
   const [orders, setOrders]               = useState([])
@@ -41,12 +43,18 @@ export default function AdminPage() {
   const [updatingOrder, setUpdatingOrder] = useState(null)
   const [stats, setStats]                 = useState({ products:0, orders:0, customers:0, revenue:0 })
 
-  // Order filter state — inline, no separate component
   const [fCustomer,  setFCustomer]  = useState('')
   const [fProduct,   setFProduct]   = useState('')
   const [fDateFrom,  setFDateFrom]  = useState('')
   const [fDateTo,    setFDateTo]    = useState('')
   const [fStatus,    setFStatus]    = useState('All')
+
+  const [cancelModal, setCancelModal]   = useState(null)
+  const [cancelReason, setCancelReason] = useState('')
+
+  const [prodPage, setProdPage]   = useState(1)
+  const [orderPage, setOrderPage] = useState(1)
+  const [custPage, setCustPage]   = useState(1)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => {
@@ -75,7 +83,6 @@ export default function AdminPage() {
   function showToast(msg) { setToast(msg); setTimeout(()=>setToast(''),3500) }
   function set(k,v) { setForm(f=>({...f,[k]:v})) }
 
-  // ── Image ─────────────────────────────────────────────────────────────────
   function onFileChange(e) {
     const file=e.target.files[0]; if(!file) return
     if(!file.type.startsWith('image/')) { showToast('Please select an image file'); return }
@@ -93,7 +100,6 @@ export default function AdminPage() {
     return supabase.storage.from(BUCKET).getPublicUrl(fileName).data.publicUrl
   }
 
-  // ── Quantity options ──────────────────────────────────────────────────────
   function addOption() { set('quantity_options',[...(form.quantity_options||[]),{ label:'',multiplier:1 }]) }
   function updateOption(idx,field,val) {
     const opts=[...(form.quantity_options||[])]
@@ -103,7 +109,6 @@ export default function AdminPage() {
   function removeOption(idx) { set('quantity_options',(form.quantity_options||[]).filter((_,i)=>i!==idx)) }
   function applyPreset(key) { set('quantity_options',PRESETS[key]) }
 
-  // ── Save product ──────────────────────────────────────────────────────────
   async function saveProduct() {
     if(!form.name||!form.price) { showToast('Name and price are required'); return }
     if(!form.image_url&&!imageFile) { showToast('Please upload a product photo'); return }
@@ -116,6 +121,7 @@ export default function AdminPage() {
       const payload={
         name:form.name, description:form.description, price:parseFloat(form.price),
         unit:form.unit, category:form.category, image_url:imageUrl, in_stock:form.in_stock,
+        is_visible: form.is_visible !== false,
         quantity_options:qty_opts.length>0?qty_opts:null, stock_quantity:stockQty,
       }
       const { error }=editing
@@ -123,6 +129,10 @@ export default function AdminPage() {
         : await supabase.from('products').insert(payload)
       if(error) throw error
       showToast(editing?'✅ Updated — customers notified!':'✅ Added — customers notified!')
+      await notifyCustomersOfProduct(
+        { ...payload, emoji: form.emoji || '🌿', name: form.name },
+        !editing
+      )
       resetForm(); loadAll()
     } catch(e) { showToast('Error: '+e.message) }
     finally { setSaving(false); setUploading(false) }
@@ -141,23 +151,35 @@ export default function AdminPage() {
   }
 
   function startEdit(prod) {
-    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??''})
+    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false })
     setEditing(true); setImagePreview(prod.image_url||null); setImageFile(null); setTab('products')
     window.scrollTo({top:0,behavior:'smooth'})
   }
 
-  async function updateOrderStatus(order,newStatus) {
-    setUpdatingOrder(order.id)
-    const { error }=await supabase.from('orders').update({status:newStatus,updated_at:new Date().toISOString()}).eq('id',order.id)
-    if(error) { showToast('Failed: '+error.message); setUpdatingOrder(null); return }
-    setOrders(prev=>prev.map(o=>o.id===order.id?{...o,status:newStatus}:o))
-    await sendOrderNotifications({...order},newStatus)
-    showToast(`Status → ${newStatus}. Customer notified!`)
-    setUpdatingOrder(null)
-    if(newStatus==='Confirmed') loadAll()
+  async function updateOrderStatus(order, newStatus) {
+    if (newStatus === 'Cancelled') { setCancelModal(order); setCancelReason(''); return }
+    await doUpdateStatus(order, newStatus, null)
   }
 
-  // ── Derived filter data ───────────────────────────────────────────────────
+  async function confirmCancellation() {
+    if (!cancelModal) return
+    await doUpdateStatus(cancelModal, 'Cancelled', cancelReason)
+    setCancelModal(null); setCancelReason('')
+  }
+
+  async function doUpdateStatus(order, newStatus, reason) {
+    setUpdatingOrder(order.id)
+    const { error } = await supabase.from('orders').update({
+      status: newStatus, cancel_reason: reason || null, updated_at: new Date().toISOString(),
+    }).eq('id', order.id)
+    if (error) { showToast('Failed: ' + error.message); setUpdatingOrder(null); return }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: newStatus, cancel_reason: reason } : o))
+    await sendOrderNotifications({ ...order, cancel_reason: reason }, newStatus)
+    showToast(`Status → ${newStatus}. Customer notified!`)
+    setUpdatingOrder(null)
+    if (newStatus === 'Confirmed') loadAll()
+  }
+
   const allOrderProducts = [...new Set(orders.flatMap(o=>(o.items||[]).map(i=>i.name)))].sort()
   const allCustomers     = [...new Set(orders.map(o=>o.customer_name||o.user_email).filter(Boolean))].sort()
 
@@ -173,12 +195,22 @@ export default function AdminPage() {
   const hasOrderFilters = fCustomer||fProduct||fDateFrom||fDateTo||fStatus!=='All'
   const filteredRevenue = filteredOrders.reduce((s,o)=>s+Number(o.total),0)
 
-  function clearOrderFilters() { setFCustomer(''); setFProduct(''); setFDateFrom(''); setFDateTo(''); setFStatus('All') }
+  function clearOrderFilters() {
+    setFCustomer(''); setFProduct(''); setFDateFrom(''); setFDateTo(''); setFStatus('All')
+    setOrderPage(1)
+  }
+
+  useEffect(() => { setProdPage(1) }, [tab])
+  useEffect(() => { setOrderPage(1) }, [fCustomer, fProduct, fDateFrom, fDateTo, fStatus])
+
+  const pagedProducts  = products.slice((prodPage-1)*PER_PAGE.products, prodPage*PER_PAGE.products)
+  const pagedOrders    = filteredOrders.slice((orderPage-1)*PER_PAGE.orders, orderPage*PER_PAGE.orders)
+  const pagedCustomers = customers.slice((custPage-1)*PER_PAGE.customers, custPage*PER_PAGE.customers)
 
   if(!user) return null
-  const previewSrc=imagePreview||form.image_url
-  const opts=form.quantity_options||[]
-  const basePrice=parseFloat(form.price)||0
+  const previewSrc = imagePreview || form.image_url
+  const opts       = form.quantity_options || []
+  const basePrice  = parseFloat(form.price) || 0
 
   function stockBadge(p) {
     if(p.stock_quantity===null||p.stock_quantity===undefined) return null
@@ -230,33 +262,38 @@ export default function AdminPage() {
                     <div style={{fontSize:36,marginBottom:10}}>🌱</div>
                     <div style={{fontWeight:600}}>No products yet — add one →</div>
                   </div>
-                : <div style={{display:'flex',flexDirection:'column',gap:9}}>
-                    {products.map(p=>{
-                      const sb=stockBadge(p)
-                      return (
-                        <div key={p.id} className="card" style={{padding:'12px 16px',display:'flex',alignItems:'center',gap:12}}>
-                          <div style={{width:52,height:52,borderRadius:10,overflow:'hidden',background:'var(--green-pale)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                            {p.image_url?<img src={p.image_url} alt={p.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />:<span style={{fontSize:26}}>🌿</span>}
-                          </div>
-                          <div style={{flex:1}}>
-                            <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-                              <span style={{fontWeight:600,fontSize:14}}>{p.name}</span>
-                              {!p.in_stock&&<span style={{fontSize:10,background:'var(--red-pale)',color:'var(--red)',padding:'2px 7px',borderRadius:8,fontWeight:600}}>Out of stock</span>}
-                              {sb&&<span style={{fontSize:10,background:sb.bg,color:sb.color,padding:'2px 7px',borderRadius:8,fontWeight:600}}>{sb.label}</span>}
-                              {p.quantity_options?.length>0&&<span style={{fontSize:10,background:'var(--gold-pale)',color:'var(--gold)',padding:'2px 7px',borderRadius:8,fontWeight:600}}>{p.quantity_options.length} size options</span>}
+                : <>
+                    <div style={{display:'flex',flexDirection:'column',gap:9}}>
+                      {pagedProducts.map(p => {
+                        const sb = stockBadge(p)
+                        return (
+                          <div key={p.id} className="card" style={{padding:'12px 16px',display:'flex',alignItems:'center',gap:12,
+                            opacity: p.is_visible===false ? 0.55 : 1}}>
+                            <div style={{width:52,height:52,borderRadius:10,overflow:'hidden',background:'var(--green-pale)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                              {p.image_url?<img src={p.image_url} alt={p.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />:<span style={{fontSize:26}}>🌿</span>}
                             </div>
-                            <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>
-                              {p.category} · <span style={{color:'var(--green)',fontWeight:600}}>₹{p.price}</span>/{p.unit}
+                            <div style={{flex:1}}>
+                              <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                                <span style={{fontWeight:600,fontSize:14}}>{p.name}</span>
+                                {p.is_visible===false && <span style={{fontSize:10,background:'#eeeeee',color:'#888',padding:'2px 7px',borderRadius:8,fontWeight:600}}>Hidden</span>}
+                                {!p.in_stock&&<span style={{fontSize:10,background:'var(--red-pale)',color:'var(--red)',padding:'2px 7px',borderRadius:8,fontWeight:600}}>Out of stock</span>}
+                                {sb&&<span style={{fontSize:10,background:sb.bg,color:sb.color,padding:'2px 7px',borderRadius:8,fontWeight:600}}>{sb.label}</span>}
+                                {p.quantity_options?.length>0&&<span style={{fontSize:10,background:'var(--gold-pale)',color:'var(--gold)',padding:'2px 7px',borderRadius:8,fontWeight:600}}>{p.quantity_options.length} size options</span>}
+                              </div>
+                              <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>
+                                {p.category} · <span style={{color:'var(--green)',fontWeight:600}}>₹{p.price}</span>/{p.unit}
+                              </div>
+                            </div>
+                            <div style={{display:'flex',gap:6}}>
+                              <button onClick={()=>startEdit(p)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12}}>Edit</button>
+                              <button onClick={()=>deleteProduct(p.id,p.image_url)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12,color:'var(--red)'}}>Delete</button>
                             </div>
                           </div>
-                          <div style={{display:'flex',gap:6}}>
-                            <button onClick={()=>startEdit(p)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12}}>Edit</button>
-                            <button onClick={()=>deleteProduct(p.id,p.image_url)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12,color:'var(--red)'}}>Delete</button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        )
+                      })}
+                    </div>
+                    <Pagination page={prodPage} total={products.length} perPage={PER_PAGE.products} onChange={setProdPage} />
+                  </>
               }
             </div>
 
@@ -341,11 +378,24 @@ export default function AdminPage() {
                 )}
               </div>
 
-              <div style={{marginBottom:18,display:'flex',alignItems:'center',gap:10}}>
+              {/* Visibility + In stock toggles */}
+              <div style={{marginBottom:10,display:'flex',alignItems:'center',gap:10}}>
                 <input type="checkbox" id="in_stock" checked={form.in_stock}
                   onChange={e=>set('in_stock',e.target.checked)}
                   style={{width:16,height:16,accentColor:'var(--green)',cursor:'pointer'}} />
-                <label htmlFor="in_stock" style={{fontSize:13,cursor:'pointer'}}>In stock (visible to customers)</label>
+                <label htmlFor="in_stock" style={{fontSize:13,cursor:'pointer'}}>In stock (available to order)</label>
+              </div>
+
+              <div style={{marginBottom:18,display:'flex',alignItems:'center',gap:10}}>
+                <input type="checkbox" id="is_visible" checked={form.is_visible!==false}
+                  onChange={e=>set('is_visible',e.target.checked)}
+                  style={{width:16,height:16,accentColor:'var(--green)',cursor:'pointer'}} />
+                <label htmlFor="is_visible" style={{fontSize:13,cursor:'pointer'}}>
+                  Visible on shop
+                  <span style={{fontSize:11,color:'var(--muted)',marginLeft:6}}>
+                    (uncheck to hide from customers)
+                  </span>
+                </label>
               </div>
 
               {/* Quantity Options */}
@@ -421,7 +471,6 @@ export default function AdminPage() {
         {/* ── ORDERS TAB ── */}
         {tab==='orders' && (
           <div>
-            {/* Filter bar */}
             <div className="card" style={{padding:'16px 18px',marginBottom:16}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                 <div style={{fontWeight:600,fontSize:14}}>🔍 Filter Orders</div>
@@ -472,7 +521,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Summary */}
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
               <div style={{fontWeight:600,fontSize:15}}>
                 {hasOrderFilters?`${filteredOrders.length} of ${orders.length} orders`:`All Orders (${orders.length})`}
@@ -484,49 +532,51 @@ export default function AdminPage() {
               )}
             </div>
 
-            {/* Orders list */}
             {filteredOrders.length===0
               ?<div className="card" style={{padding:48,textAlign:'center',color:'var(--muted)'}}>
                   <div style={{fontSize:36,marginBottom:10}}>📦</div>
                   <div style={{fontWeight:600}}>{orders.length===0?'No orders yet':'No orders match your filters'}</div>
                   {hasOrderFilters&&<button onClick={clearOrderFilters} className="btn-o" style={{marginTop:14,padding:'7px 18px',fontSize:13}}>Clear filters</button>}
                 </div>
-              :<div style={{display:'flex',flexDirection:'column',gap:12}}>
-                  {filteredOrders.map(o=>(
-                    <div key={o.id} className="card" style={{padding:18}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
-                        <div>
-                          <div style={{fontWeight:600,fontSize:15}}>{o.customer_name||o.user_email}</div>
-                          <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>#{o.id.slice(0,8).toUpperCase()} · {new Date(o.created_at).toLocaleString('en-IN')}</div>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>📍 {o.address}</div>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>📞 {o.phone}</div>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>
-                            {o.payment_method==='razorpay'?'💳 Paid Online':'💵 Cash on Delivery'}
-                            {o.payment_status==='paid'&&<span style={{color:'var(--green)',fontWeight:600}}> ✓</span>}
+              :<>
+                  <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                    {pagedOrders.map(o=>(
+                      <div key={o.id} className="card" style={{padding:18}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+                          <div>
+                            <div style={{fontWeight:600,fontSize:15}}>{o.customer_name||o.user_email}</div>
+                            <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>#{o.id.slice(0,8).toUpperCase()} · {new Date(o.created_at).toLocaleString('en-IN')}</div>
+                            <div style={{fontSize:12,color:'var(--muted)'}}>📍 {o.address}</div>
+                            <div style={{fontSize:12,color:'var(--muted)'}}>📞 {o.phone}</div>
+                            <div style={{fontSize:12,color:'var(--muted)'}}>
+                              {o.payment_method==='razorpay'?'💳 Paid Online':'💵 Cash on Delivery'}
+                              {o.payment_status==='paid'&&<span style={{color:'var(--green)',fontWeight:600}}> ✓</span>}
+                            </div>
+                          </div>
+                          <div style={{textAlign:'right'}}>
+                            <div style={{...serif,fontSize:20,fontWeight:700,color:'var(--green)',marginBottom:8}}>₹{Number(o.total).toFixed(2)}</div>
+                            <select value={o.status} disabled={updatingOrder===o.id}
+                              onChange={e=>updateOrderStatus(o,e.target.value)}
+                              style={{padding:'6px 10px',borderRadius:8,border:'1.5px solid var(--green)',
+                                background:'var(--green-pale)',color:'var(--green)',fontWeight:600,fontSize:12,cursor:'pointer',minWidth:160}}>
+                              {ORDER_STATUSES.map(s=><option key={s}>{s}</option>)}
+                            </select>
+                            {updatingOrder===o.id&&<div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Notifying…</div>}
                           </div>
                         </div>
-                        <div style={{textAlign:'right'}}>
-                          <div style={{...serif,fontSize:20,fontWeight:700,color:'var(--green)',marginBottom:8}}>₹{Number(o.total).toFixed(2)}</div>
-                          <select value={o.status} disabled={updatingOrder===o.id}
-                            onChange={e=>updateOrderStatus(o,e.target.value)}
-                            style={{padding:'6px 10px',borderRadius:8,border:'1.5px solid var(--green)',
-                              background:'var(--green-pale)',color:'var(--green)',fontWeight:600,fontSize:12,cursor:'pointer',minWidth:160}}>
-                            {ORDER_STATUSES.map(s=><option key={s}>{s}</option>)}
-                          </select>
-                          {updatingOrder===o.id&&<div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Notifying…</div>}
+                        <div style={{borderTop:'1px solid var(--border)',paddingTop:10,display:'flex',flexWrap:'wrap',gap:6}}>
+                          {(o.items||[]).map((item,i)=>(
+                            <span key={i} style={{fontSize:12,background:'var(--bg)',padding:'3px 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5}}>
+                              {item.image_url&&<img src={item.image_url} alt="" style={{width:16,height:16,borderRadius:3,objectFit:'cover'}} />}
+                              {item.name}{item.selected_option?` (${item.selected_option})`:''} × {item.qty} — ₹{((item.effective_price??item.price)*item.qty).toFixed(0)}
+                            </span>
+                          ))}
                         </div>
                       </div>
-                      <div style={{borderTop:'1px solid var(--border)',paddingTop:10,display:'flex',flexWrap:'wrap',gap:6}}>
-                        {(o.items||[]).map((item,i)=>(
-                          <span key={i} style={{fontSize:12,background:'var(--bg)',padding:'3px 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5}}>
-                            {item.image_url&&<img src={item.image_url} alt="" style={{width:16,height:16,borderRadius:3,objectFit:'cover'}} />}
-                            {item.name}{item.selected_option?` (${item.selected_option})`:''} × {item.qty} — ₹{((item.effective_price??item.price)*item.qty).toFixed(0)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  <Pagination page={orderPage} total={filteredOrders.length} perPage={PER_PAGE.orders} onChange={setOrderPage} />
+                </>
             }
           </div>
         )}
@@ -539,24 +589,27 @@ export default function AdminPage() {
               ?<div className="card" style={{padding:48,textAlign:'center',color:'var(--muted)'}}>
                   <div style={{fontSize:36,marginBottom:10}}>👥</div><div style={{fontWeight:600}}>No customers yet</div>
                 </div>
-              :<div style={{display:'flex',flexDirection:'column',gap:8}}>
-                  {customers.map(c=>(
-                    <div key={c.id} className="card" style={{padding:'12px 18px',display:'flex',alignItems:'center',gap:14}}>
-                      <div style={{width:38,height:38,borderRadius:'50%',background:'var(--green-pale)',
-                        display:'flex',alignItems:'center',justifyContent:'center',color:'var(--green)',fontWeight:700,fontSize:14,flexShrink:0}}>
-                        {(c.name||c.email||'C').charAt(0).toUpperCase()}
+              :<>
+                  <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                    {pagedCustomers.map(c=>(
+                      <div key={c.id} className="card" style={{padding:'12px 18px',display:'flex',alignItems:'center',gap:14}}>
+                        <div style={{width:38,height:38,borderRadius:'50%',background:'var(--green-pale)',
+                          display:'flex',alignItems:'center',justifyContent:'center',color:'var(--green)',fontWeight:700,fontSize:14,flexShrink:0}}>
+                          {(c.name||c.email||'C').charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:14}}>{c.name||'(no name)'}</div>
+                          <div style={{fontSize:12,color:'var(--muted)'}}>{c.email}</div>
+                        </div>
+                        <div style={{textAlign:'right'}}>
+                          <div style={{fontSize:12,color:'var(--green)',fontWeight:600}}>{orders.filter(o=>o.user_email===c.email).length} order(s)</div>
+                          <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>Joined {new Date(c.created_at).toLocaleDateString('en-IN')}</div>
+                        </div>
                       </div>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:600,fontSize:14}}>{c.name||'(no name)'}</div>
-                        <div style={{fontSize:12,color:'var(--muted)'}}>{c.email}</div>
-                      </div>
-                      <div style={{textAlign:'right'}}>
-                        <div style={{fontSize:12,color:'var(--green)',fontWeight:600}}>{orders.filter(o=>o.user_email===c.email).length} order(s)</div>
-                        <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>Joined {new Date(c.created_at).toLocaleDateString('en-IN')}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  <Pagination page={custPage} total={customers.length} perPage={PER_PAGE.customers} onChange={setCustPage} />
+                </>
             }
           </div>
         )}
@@ -569,6 +622,68 @@ export default function AdminPage() {
           {toast}
         </div>
       )}
+
+      {/* Cancellation Modal */}
+      {cancelModal && (
+        <div className="overlay" onClick={e => e.target===e.currentTarget && setCancelModal(null)}>
+          <div className="modal" style={{maxWidth:420}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <div style={{...serif,fontSize:20,fontWeight:700,color:'var(--red)'}}>❌ Cancel Order</div>
+              <button onClick={()=>setCancelModal(null)}
+                style={{background:'none',border:'none',cursor:'pointer',fontSize:20,color:'var(--muted)'}}>✕</button>
+            </div>
+            <div style={{padding:'12px 14px',background:'var(--bg)',borderRadius:10,marginBottom:18}}>
+              <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>{cancelModal.customer_name||cancelModal.user_email}</div>
+              <div style={{fontSize:12,color:'var(--muted)',marginBottom:4}}>
+                #{cancelModal.id.slice(0,8).toUpperCase()} · ₹{Number(cancelModal.total).toFixed(2)}
+              </div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+                {(cancelModal.items||[]).map((item,i)=>(
+                  <span key={i} style={{fontSize:11,background:'var(--card)',padding:'2px 8px',borderRadius:10,border:'1px solid var(--border)'}}>
+                    {item.name}{item.selected_option?` (${item.selected_option})`:''} × {item.qty}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div style={{marginBottom:18}}>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:6,color:'var(--text)'}}>
+                Reason for cancellation <span style={{color:'var(--muted)',fontWeight:400}}>(sent to customer)</span>
+              </div>
+              <textarea className="inp" rows={3} value={cancelReason}
+                onChange={e=>setCancelReason(e.target.value)}
+                placeholder="e.g. Sorry, this item is currently out of stock…"
+                style={{fontSize:13,lineHeight:1.6}} />
+              <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+                The customer will receive this reason via in-app notification and email.
+              </div>
+            </div>
+            <div style={{marginBottom:18}}>
+              <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:7,textTransform:'uppercase',letterSpacing:0.5}}>Quick reasons</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                {['Item currently out of stock','Unable to deliver to your area today','Ordered quantity not available','Duplicate order detected','Delivery address is too far'].map(r=>(
+                  <button key={r} onClick={()=>setCancelReason(r)}
+                    style={{fontSize:11,padding:'5px 11px',borderRadius:20,cursor:'pointer',fontWeight:500,
+                      border:`1.5px solid ${cancelReason===r?'var(--red)':'var(--border)'}`,
+                      background:cancelReason===r?'var(--red-pale)':'transparent',
+                      color:cancelReason===r?'var(--red)':'var(--muted)',transition:'all .15s'}}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setCancelModal(null)} className="btn-o" style={{flex:1,padding:11}}>Keep Order</button>
+              <button onClick={confirmCancellation} disabled={updatingOrder===cancelModal.id}
+                style={{flex:1,padding:11,background:'var(--red)',color:'#fff',border:'none',
+                  borderRadius:9,cursor:'pointer',fontSize:14,fontWeight:500,
+                  opacity:updatingOrder===cancelModal.id?0.7:1}}>
+                {updatingOrder===cancelModal.id?'Cancelling…':'Confirm Cancellation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </>
   )

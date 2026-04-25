@@ -540,6 +540,7 @@ export default function AdminPage() {
   <div style={{fontWeight:600,fontSize:15}}>
     {hasOrderFilters?`${filteredOrders.length} of ${orders.length} orders`:`All Orders (${orders.length})`}
   </div>
+    
   <div style={{display:'flex',gap:10,alignItems:'center'}}>
     {filteredOrders.length>0&&(
       <div style={{fontSize:13,color:'var(--muted)'}}>

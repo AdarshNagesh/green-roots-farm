@@ -35,20 +35,18 @@ function StatusBadge({ status }) {
 
 export default function OrdersPage() {
   const router = useRouter()
-  const [user, setUser]       = useState(null)
-  const [orders, setOrders]   = useState([])
-  const [loading, setLoading] = useState(true)
+  const [user, setUser]         = useState(null)
+  const [orders, setOrders]     = useState([])
+  const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState(null)
-  const [notifs, setNotifs]   = useState([])
+  const [notifs, setNotifs]     = useState([])
 
-  // Filters
   const [filterProduct,  setFilterProduct]  = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo,   setFilterDateTo]   = useState('')
   const [filterStatus,   setFilterStatus]   = useState('All')
   const [page, setPage] = useState(1)
 
-  // Reset to page 1 when filters change
   useEffect(() => { setPage(1) }, [filterProduct, filterDateFrom, filterDateTo, filterStatus])
 
   useEffect(() => {
@@ -63,7 +61,6 @@ export default function OrdersPage() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Realtime order status updates
   useEffect(() => {
     if (!user) return
     const channel = supabase.channel('orders_' + user.id)
@@ -86,19 +83,13 @@ export default function OrdersPage() {
     setLoading(false)
   }
 
-  // Build unique product names from all orders
   const allProductNames = [...new Set(
     orders.flatMap(o => (o.items||[]).map(i => i.name))
   )].sort()
 
-  // Apply filters
   const filtered = orders.filter(o => {
-    if (filterProduct) {
-      if (!(o.items||[]).some(i => i.name===filterProduct)) return false
-    }
-    if (filterDateFrom) {
-      if (new Date(o.created_at) < new Date(filterDateFrom)) return false
-    }
+    if (filterProduct && !(o.items||[]).some(i => i.name===filterProduct)) return false
+    if (filterDateFrom && new Date(o.created_at) < new Date(filterDateFrom)) return false
     if (filterDateTo) {
       const end = new Date(filterDateTo); end.setHours(23,59,59,999)
       if (new Date(o.created_at) > end) return false
@@ -107,16 +98,14 @@ export default function OrdersPage() {
     return true
   })
 
-  const hasFilters = filterProduct || filterDateFrom || filterDateTo || filterStatus !== 'All'
+  const hasFilters  = filterProduct || filterDateFrom || filterDateTo || filterStatus !== 'All'
+  const pagedOrders = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE)
+  const stepIndex   = (status) => STATUS_STEPS.indexOf(status)
 
   function clearFilters() {
     setFilterProduct(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterStatus('All')
     setPage(1)
   }
-
-  const pagedOrders = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
-
-  const stepIndex = (status) => STATUS_STEPS.indexOf(status)
 
   return (
     <>
@@ -126,7 +115,6 @@ export default function OrdersPage() {
 
       <main style={{ maxWidth:800, margin:'0 auto', padding:'32px 20px' }}>
 
-        {/* Title */}
         <div style={{ marginBottom:24 }}>
           <div style={{ ...serif, fontSize:30, fontWeight:700, color:'var(--green)' }}>My Orders</div>
           <div style={{ fontSize:13, color:'var(--muted)', marginTop:4 }}>
@@ -134,7 +122,7 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* ── Filter bar ── */}
+        {/* Filter bar */}
         {orders.length > 0 && (
           <div className="card" style={{ padding:'16px 18px', marginBottom:20 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
@@ -148,8 +136,6 @@ export default function OrdersPage() {
               )}
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10 }}>
-
-              {/* Product */}
               <div>
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>Product</div>
@@ -159,24 +145,18 @@ export default function OrdersPage() {
                   {allProductNames.map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-
-              {/* Date from */}
               <div>
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>From date</div>
                 <input className="inp" type="date" style={{ padding:'7px 10px', fontSize:13 }}
                   value={filterDateFrom} onChange={e=>{ setFilterDateFrom(e.target.value); setPage(1) }} />
               </div>
-
-              {/* Date to */}
               <div>
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>To date</div>
                 <input className="inp" type="date" style={{ padding:'7px 10px', fontSize:13 }}
                   value={filterDateTo} onChange={e=>{ setFilterDateTo(e.target.value); setPage(1) }} />
               </div>
-
-              {/* Status */}
               <div>
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>Status</div>
@@ -192,7 +172,6 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {/* Results summary */}
         {hasFilters && (
           <div style={{ fontSize:13, color:'var(--muted)', marginBottom:14 }}>
             Showing <strong style={{ color:'var(--text)' }}>{filtered.length}</strong> of {orders.length} orders
@@ -200,7 +179,6 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {/* ── Orders list ── */}
         {loading ? (
           <div style={{ textAlign:'center', padding:'80px 20px', color:'var(--muted)' }}>
             <div style={{ fontSize:36, marginBottom:12 }}>🌱</div>Loading your orders…
@@ -230,7 +208,8 @@ export default function OrdersPage() {
 
               return (
                 <div key={order.id} className="card" style={{ overflow:'hidden' }}>
-                  {/* Order header */}
+
+                  {/* Order header — click to expand */}
                   <div style={{ padding:'16px 20px', display:'flex', alignItems:'center',
                     justifyContent:'space-between', cursor:'pointer', userSelect:'none' }}
                     onClick={() => setExpanded(isExpanded ? null : order.id)}>
@@ -244,13 +223,16 @@ export default function OrdersPage() {
                           Order #{order.id.slice(0,8).toUpperCase()}
                         </div>
                         <div style={{ fontSize:12, color:'var(--muted)', marginTop:2 }}>
-                          {new Date(order.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}
+                          {new Date(order.created_at).toLocaleDateString('en-IN', {
+                            day:'numeric', month:'short', year:'numeric'
+                          })}
                           &nbsp;·&nbsp;{order.items?.length||0} item{order.items?.length!==1?'s':''}
                           &nbsp;·&nbsp;{order.payment_method==='razorpay'?'💳 Paid':'💵 COD'}
                         </div>
-                        {/* Product names summary */}
                         <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>
-                          {(order.items||[]).map(i=>i.name+(i.selected_option?` (${i.selected_option})`:'')).join(', ')}
+                          {(order.items||[]).map(i =>
+                            i.name+(i.selected_option?` (${i.selected_option})`:'')
+                          ).join(', ')}
                         </div>
                       </div>
                     </div>
@@ -275,10 +257,12 @@ export default function OrdersPage() {
                           const done   = si >= idx
                           const active = si === idx
                           return (
-                            <div key={step} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', position:'relative' }}>
+                            <div key={step} style={{ flex:1, display:'flex', flexDirection:'column',
+                              alignItems:'center', position:'relative' }}>
                               {idx > 0 && (
                                 <div style={{ position:'absolute', top:14, right:'50%', left:'-50%',
-                                  height:3, background: si>=idx ? 'var(--green)' : 'var(--border)', transition:'background .4s' }} />
+                                  height:3, background: si>=idx ? 'var(--green)' : 'var(--border)',
+                                  transition:'background .4s' }} />
                               )}
                               <div style={{ width:28, height:28, borderRadius:'50%', zIndex:1,
                                 background: done ? 'var(--green)' : 'var(--border)',
@@ -300,9 +284,11 @@ export default function OrdersPage() {
                     </div>
                   )}
 
+                  {/* Cancelled */}
                   {isCancelled && (
                     <div style={{ padding:'0 20px 16px' }}>
-                      <div style={{ background:'var(--red-pale)', color:'var(--red)', padding:'12px 14px', borderRadius:9, fontSize:13, lineHeight:1.6 }}>
+                      <div style={{ background:'var(--red-pale)', color:'var(--red)',
+                        padding:'12px 14px', borderRadius:9, fontSize:13, lineHeight:1.6 }}>
                         ❌ This order was cancelled.
                         {order.cancel_reason && (
                           <div style={{ marginTop:6, fontWeight:600 }}>
@@ -315,9 +301,12 @@ export default function OrdersPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Payment pending */}
                   {isPending && (
                     <div style={{ padding:'0 20px 16px' }}>
-                      <div style={{ background:'var(--gold-pale)', color:'var(--gold)', padding:'10px 14px', borderRadius:9, fontSize:13 }}>
+                      <div style={{ background:'var(--gold-pale)', color:'var(--gold)',
+                        padding:'10px 14px', borderRadius:9, fontSize:13 }}>
                         ⏳ Payment is being processed. Your order will be confirmed once payment is received.
                       </div>
                     </div>
@@ -326,26 +315,49 @@ export default function OrdersPage() {
                   {/* Expanded details */}
                   {isExpanded && (
                     <div style={{ borderTop:'1px solid var(--border)', padding:'16px 20px', background:'var(--bg)' }}>
+
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+
+                        {/* Delivery address */}
                         <div>
                           <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600,
-                            textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Delivery Address</div>
+                            textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>
+                            Delivery Address
+                          </div>
                           <div style={{ fontSize:13, color:'var(--text)', lineHeight:1.7 }}>
                             <div style={{ fontWeight:600 }}>{order.customer_name}</div>
                             <div>{order.address}</div>
                             <div>📞 {order.phone}</div>
+                            {order.notes && (
+                              <div style={{ marginTop:6, fontSize:12, fontStyle:'italic',
+                                color:'var(--muted)', background:'var(--card)',
+                                padding:'6px 10px', borderRadius:7, border:'1px solid var(--border)' }}>
+                                📝 {order.notes}
+                              </div>
+                            )}
                           </div>
                         </div>
+
+                        {/* Items ordered */}
                         <div>
                           <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600,
-                            textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Items Ordered</div>
+                            textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>
+                            Items Ordered
+                          </div>
                           <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
                             {(order.items||[]).map((item,i) => (
                               <div key={i} style={{ display:'flex', justifyContent:'space-between',
                                 alignItems:'center', fontSize:13, gap:8 }}>
                                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                                  {item.image_url && <img src={item.image_url} alt="" style={{ width:20, height:20, borderRadius:4, objectFit:'cover' }} />}
-                                  <span>{item.name}{item.selected_option?` (${item.selected_option})`:''} × {item.qty}</span>
+                                  {item.image_url && (
+                                    <img src={item.image_url} alt=""
+                                      style={{ width:20, height:20, borderRadius:4, objectFit:'cover' }} />
+                                  )}
+                                  <span>
+                                    {item.name}
+                                    {item.selected_option ? ` (${item.selected_option})` : ''}
+                                    {' '}× {item.qty}
+                                  </span>
                                 </div>
                                 <span style={{ color:'var(--green)', fontWeight:600, flexShrink:0 }}>
                                   ₹{((item.effective_price??item.price)*item.qty).toFixed(0)}
@@ -359,7 +371,20 @@ export default function OrdersPage() {
                             </div>
                           </div>
                         </div>
+
                       </div>
+
+                      {/* Invoice button — outside grid, after both columns */}
+                      <div style={{ borderTop:'1px solid var(--border)', marginTop:16,
+                        paddingTop:14, textAlign:'right' }}>
+                        <a href={`/invoice?id=${order.id}`} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize:13, color:'var(--green)', textDecoration:'none', fontWeight:600,
+                            padding:'7px 16px', border:'1.5px solid var(--green)', borderRadius:8,
+                            display:'inline-flex', alignItems:'center', gap:6 }}>
+                          📄 Download Invoice
+                        </a>
+                      </div>
+
                     </div>
                   )}
                 </div>
@@ -370,7 +395,7 @@ export default function OrdersPage() {
 
         {/* Pagination */}
         <Pagination page={page} total={filtered.length} perPage={PER_PAGE}
-          onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+          onChange={p => { setPage(p); window.scrollTo({ top:0, behavior:'smooth' }) }} />
 
       </main>
 

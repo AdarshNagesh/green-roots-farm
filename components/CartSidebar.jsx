@@ -4,10 +4,38 @@ import { sendOrderNotifications } from '../lib/notifications'
 
 const serif = { fontFamily: 'Playfair Display, serif' }
 
+// Mysore city pincodes 570001–570030
+const ALLOWED_PINCODES = Array.from({ length: 30 }, (_, i) => String(570001 + i))
+
+function extractPincode(address) {
+  const match = address.match(/\b(5700\d{2}|5710\d{2}|5711\d{2})\b/)
+  return match ? match[0] : null
+}
+
+function validatePincode(address) {
+  const pin = extractPincode(address)
+  if (!pin) return { valid: false, message: 'Please include your 6-digit pincode in the address.' }
+  if (!ALLOWED_PINCODES.includes(pin)) return { valid: false, message: `Sorry, we currently deliver only within Mysore city (570001–570030). Your pincode ${pin} is outside our delivery area.` }
+  return { valid: true, message: '' }
+}
+
+function validateMinOrders(cart) {
+  const errors = []
+  for (const item of cart) {
+    if (item.min_order_value && item.min_order_value > 0) {
+      const itemTotal = (item.effective_price ?? item.price) * item.qty
+      if (itemTotal < item.min_order_value) {
+        errors.push(`${item.name}: minimum order is ₹${item.min_order_value} (currently ₹${itemTotal.toFixed(0)})`)
+      }
+    }
+  }
+  return errors
+}
+
 export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearCart }) {
   const [step, setStep]         = useState('cart')
   const [payMode, setPayMode]   = useState('cod')
-  const [form, setForm]         = useState({ name:'', address:'', phone:'' })
+  const [form, setForm]         = useState({ name:'', address:'', phone:'', notes:'' })
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [rzpReady, setRzpReady] = useState(false)
@@ -18,17 +46,34 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (document.getElementById('rzp-script')) { setRzpReady(true); return }
-    const s    = document.createElement('script')
-    s.id       = 'rzp-script'
-    s.src      = 'https://checkout.razorpay.com/v1/checkout.js'
-    s.onload   = () => setRzpReady(true)
+    const s = document.createElement('script')
+    s.id = 'rzp-script'; s.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    s.onload = () => setRzpReady(true)
     document.body.appendChild(s)
   }, [])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
 
+  function validateCheckout() {
+    if (!form.name || !form.address || !form.phone) return 'Please fill all required fields'
+    const pc = validatePincode(form.address)
+    if (!pc.valid) return pc.message
+    const minErrors = validateMinOrders(cart)
+    if (minErrors.length > 0) return 'Minimum order not met:\n' + minErrors.join('\n')
+    return null
+  }
+
+  async function notifyAdmin(order) {
+    try {
+      await fetch('/api/notify/admin-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order }),
+      })
+    } catch (e) { console.error('Admin notify failed:', e) }
+  }
+
   async function createDBOrder(paymentMethod, paymentStatus) {
-    // Normalise cart items for storage — store effective_price explicitly
     const items = cart.map(i => ({
       id:              i.id,
       name:            i.name,
@@ -36,6 +81,7 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
       price:           i.price,
       effective_price: i.effective_price ?? i.price,
       selected_option: i.selected_option || null,
+      multiplier:      i.multiplier || 1,
       unit:            i.unit,
       qty:             i.qty,
     }))
@@ -45,6 +91,7 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
       customer_name:  form.name,
       address:        form.address,
       phone:          form.phone,
+      notes:          form.notes || null,
       items,
       total,
       status:         paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
@@ -56,19 +103,24 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   }
 
   async function handleCOD() {
-    if (!form.name || !form.address || !form.phone) { setError('Please fill all fields'); return }
+    const err = validateCheckout()
+    if (err) { setError(err); return }
     setLoading(true)
     try {
       const order = await createDBOrder('cod', 'pending')
-      await sendOrderNotifications({ ...order, customer_name: form.name, address: form.address, phone: form.phone, user_email: user.email }, 'Confirmed')
+      await Promise.all([
+        sendOrderNotifications({ ...order, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }, 'Confirmed'),
+        notifyAdmin({ ...order, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }),
+      ])
       onClearCart(); setStep('done')
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
 
   async function handleRazorpay() {
-    if (!form.name || !form.address || !form.phone) { setError('Please fill all fields'); return }
-    if (!rzpReady) { setError('Payment SDK not loaded yet — please try again.'); return }
+    const err = validateCheckout()
+    if (err) { setError(err); return }
+    if (!rzpReady) { setError('Payment SDK not loaded — please try again.'); return }
     setLoading(true); setError('')
     try {
       const res = await fetch('/api/razorpay/create-order', {
@@ -77,14 +129,11 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
       })
       const rzpOrder = await res.json()
       if (!res.ok) throw new Error(rzpOrder.error)
-
       const dbOrder = await createDBOrder('razorpay', 'pending')
-
       const options = {
         key:         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount:      rzpOrder.amount,
-        currency:    rzpOrder.currency,
-        name:        'Green Roots Farm',
+        amount:      rzpOrder.amount, currency: rzpOrder.currency,
+        name:        'Adarshini Organic Farm',
         description: 'Fresh Organic Produce',
         order_id:    rzpOrder.orderId,
         prefill:     { name: form.name, email: user.email, contact: form.phone },
@@ -96,7 +145,10 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
           })
           const vData = await vRes.json()
           if (!vData.success) { setError('Payment verification failed. Contact support.'); return }
-          await sendOrderNotifications({ ...dbOrder, customer_name: form.name, address: form.address, phone: form.phone, user_email: user.email }, 'Confirmed')
+          await Promise.all([
+            sendOrderNotifications({ ...dbOrder, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }, 'Confirmed'),
+            notifyAdmin({ ...dbOrder, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }),
+          ])
           onClearCart(); setStep('done')
         },
         modal: { ondismiss: () => setLoading(false) },
@@ -120,17 +172,19 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
             style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, color:'var(--muted)' }}>✕</button>
         </div>
 
+        {/* ── DONE ── */}
         {step==='done' && (
           <div style={{ textAlign:'center', padding:'60px 20px' }}>
             <div style={{ fontSize:52, marginBottom:16 }}>✅</div>
             <div style={{ ...serif, fontSize:22, fontWeight:700, color:'var(--green)', marginBottom:8 }}>Order Placed!</div>
             <div style={{ fontSize:14, color:'var(--muted)', lineHeight:1.7 }}>
-              Confirmation sent to <strong>{user.email}</strong>.<br/>SMS update on the way!
+              Confirmation sent to <strong>{user.email}</strong>.<br/>We'll be in touch shortly!
             </div>
             <button className="btn-g" style={{ marginTop:22 }} onClick={onClose}>Continue Shopping</button>
           </div>
         )}
 
+        {/* ── EMPTY ── */}
         {step==='cart' && cart.length===0 && (
           <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--muted)' }}>
             <div style={{ fontSize:44, marginBottom:12 }}>🧺</div>
@@ -139,24 +193,38 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
           </div>
         )}
 
+        {/* ── CART ITEMS ── */}
         {step==='cart' && cart.length>0 && <>
           <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:20 }}>
-            {cart.map(item => <CartItem key={item.id} item={item} onUpdateQty={onUpdateQty} />)}
+            {cart.map(item => <CartItem key={item.cartKey||item.id} item={item} onUpdateQty={onUpdateQty} />)}
           </div>
+
+          {/* Min order warnings */}
+          {validateMinOrders(cart).length > 0 && (
+            <div style={{ marginBottom:14, padding:'10px 14px', background:'var(--gold-pale)',
+              borderRadius:10, fontSize:12, color:'var(--gold)', lineHeight:1.6 }}>
+              ⚠️ {validateMinOrders(cart).join(' · ')}
+            </div>
+          )}
+
           <div style={{ borderTop:'1px solid var(--border)', paddingTop:16, marginBottom:20,
             display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <span style={{ fontSize:14, color:'var(--muted)' }}>{count} item{count!==1?'s':''}</span>
             <span style={{ ...serif, fontSize:22, fontWeight:700, color:'var(--green)' }}>₹{total.toFixed(2)}</span>
           </div>
           <button className="btn-g" style={{ width:'100%', padding:13, fontSize:15 }}
-            onClick={() => setStep('checkout')}>Proceed to Checkout →</button>
+            disabled={validateMinOrders(cart).length > 0}
+            onClick={() => setStep('checkout')}>
+            {validateMinOrders(cart).length > 0 ? 'Meet minimum order to proceed' : 'Proceed to Checkout →'}
+          </button>
         </>}
 
+        {/* ── CHECKOUT ── */}
         {step==='checkout' && <div>
           <div style={{ fontWeight:600, fontSize:14, marginBottom:12 }}>Delivery Details</div>
           {[
-            { label:'Full Name *',    key:'name',  placeholder:'Your name', type:'text' },
-            { label:'Phone *',        key:'phone', placeholder:'+91 98765 43210', type:'tel' },
+            { label:'Full Name *',  key:'name',  placeholder:'Your name', type:'text' },
+            { label:'Phone *',      key:'phone', placeholder:'+91 98765 43210', type:'tel' },
           ].map(f => (
             <div key={f.key} style={{ marginBottom:11 }}>
               <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>{f.label}</div>
@@ -164,24 +232,45 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
                 onChange={e => set(f.key, e.target.value)} placeholder={f.placeholder} />
             </div>
           ))}
-          <div style={{ marginBottom:18 }}>
-            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Address *</div>
+
+          <div style={{ marginBottom:11 }}>
+            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+              Address * <span style={{ fontWeight:400 }}>(include your 6-digit pincode)</span>
+            </div>
             <textarea className="inp" rows={3} value={form.address}
-              onChange={e => set('address', e.target.value)} placeholder="Door no, street, city, pincode…" />
+              onChange={e => set('address', e.target.value)}
+              placeholder="Door no, street, area, Mysore — 570XXX" />
+            {/* Pincode feedback */}
+            {form.address.length > 10 && (() => {
+              const pc = validatePincode(form.address)
+              const pin = extractPincode(form.address)
+              if (!pin) return <div style={{ fontSize:11, color:'var(--gold)', marginTop:4 }}>⚠️ Add your pincode (570001–570030)</div>
+              if (!pc.valid) return <div style={{ fontSize:11, color:'var(--red)', marginTop:4 }}>❌ {pc.message}</div>
+              return <div style={{ fontSize:11, color:'var(--green)', marginTop:4 }}>✓ Pincode {pin} — we deliver here!</div>
+            })()}
           </div>
 
+          {/* Order notes */}
+          <div style={{ marginBottom:18 }}>
+            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+              Delivery Note <span style={{ fontWeight:400 }}>(optional)</span>
+            </div>
+            <input className="inp" value={form.notes}
+              onChange={e => set('notes', e.target.value)}
+              placeholder="e.g. Leave at gate · Call before delivery · No plastic bags" />
+          </div>
+
+          {/* Payment method */}
           <div style={{ fontWeight:600, fontSize:14, marginBottom:12 }}>Payment Method</div>
           <div style={{ display:'flex', flexDirection:'column', gap:9, marginBottom:18 }}>
             {[
               { id:'cod',      label:'💵 Cash on Delivery', desc:'Pay when your order arrives' },
-              { id:'razorpay', label:'💳 Pay Online',        desc:'UPI · Cards · Net Banking via Razorpay' },
+              { id:'razorpay', label:'💳 Pay Online',        desc:'UPI · Cards · Net Banking' },
             ].map(opt => (
-              <label key={opt.id} style={{
-                display:'flex', alignItems:'center', gap:12, padding:'13px 16px',
+              <label key={opt.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px',
                 border:`2px solid ${payMode===opt.id ? 'var(--green)' : 'var(--border)'}`,
                 borderRadius:12, cursor:'pointer', transition:'all .2s',
-                background: payMode===opt.id ? 'var(--green-pale)' : 'transparent',
-              }}>
+                background: payMode===opt.id ? 'var(--green-pale)' : 'transparent' }}>
                 <input type="radio" name="payment" value={opt.id} checked={payMode===opt.id}
                   onChange={() => setPayMode(opt.id)}
                   style={{ accentColor:'var(--green)', width:16, height:16 }} />
@@ -199,8 +288,12 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
             <span style={{ ...serif, fontSize:20, fontWeight:700, color:'var(--green)' }}>₹{total.toFixed(2)}</span>
           </div>
 
-          {error && <div style={{ fontSize:13, color:'var(--red)', marginBottom:12,
-            padding:'9px 12px', background:'var(--red-pale)', borderRadius:9 }}>{error}</div>}
+          {error && (
+            <div style={{ fontSize:13, color:'var(--red)', marginBottom:12,
+              padding:'10px 13px', background:'var(--red-pale)', borderRadius:9, whiteSpace:'pre-line' }}>
+              {error}
+            </div>
+          )}
 
           <button className="btn-g" style={{ width:'100%', padding:13, fontSize:15, marginBottom:8 }}
             disabled={loading}
@@ -219,12 +312,10 @@ function CartItem({ item, onUpdateQty }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:11,
       padding:'11px 13px', background:'var(--bg)', borderRadius:12 }}>
-      <div style={{ width:44, height:44, borderRadius:8, overflow:'hidden',
-        background:'var(--green-pale)', flexShrink:0,
-        display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ width:44, height:44, borderRadius:8, overflow:'hidden', background:'var(--green-pale)',
+        flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
         {item.image_url
-          ? <img src={item.image_url} alt={item.name}
-              style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+          ? <img src={item.image_url} alt={item.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
           : <span style={{ fontSize:22 }}>{item.emoji || '🌿'}</span>
         }
       </div>
@@ -232,19 +323,24 @@ function CartItem({ item, onUpdateQty }) {
         <div style={{ fontWeight:500, fontSize:13 }}>{item.name}</div>
         <div style={{ fontSize:12, color:'var(--muted)' }}>
           {item.selected_option || `₹${item.price}/${item.unit}`}
-          {item.selected_option && ` · ₹${(item.effective_price??item.price).toFixed(0)}`}
+          {item.selected_option && ` · ₹${(item.effective_price ?? item.price).toFixed(0)}`}
         </div>
+        {item.min_order_value && (item.effective_price ?? item.price) * item.qty < item.min_order_value && (
+          <div style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>
+            Min order ₹{item.min_order_value}
+          </div>
+        )}
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:5 }}>
         {['−','+'].map((sym,i) => (
-          <button key={sym} onClick={() => onUpdateQty(item.cartKey || item.id, item.qty+(i===0?-1:1))}
-            style={{ width:26,height:26,borderRadius:7,border:'1px solid var(--border)',
-              background:'var(--card)',cursor:'pointer',fontSize:15,
-              display:'flex',alignItems:'center',justifyContent:'center' }}>{sym}</button>
+          <button key={sym} onClick={() => onUpdateQty(item.cartKey||item.id, item.qty+(i===0?-1:1))}
+            style={{ width:26, height:26, borderRadius:7, border:'1px solid var(--border)',
+              background:'var(--card)', cursor:'pointer', fontSize:15,
+              display:'flex', alignItems:'center', justifyContent:'center' }}>{sym}</button>
         ))}
-        <span style={{ fontSize:13,fontWeight:600,minWidth:22,textAlign:'center',margin:'0 2px' }}>{item.qty}</span>
+        <span style={{ fontSize:13, fontWeight:600, minWidth:22, textAlign:'center', margin:'0 2px' }}>{item.qty}</span>
       </div>
-      <div style={{ fontWeight:700,fontSize:13,minWidth:48,textAlign:'right',color:'var(--green)' }}>
+      <div style={{ fontWeight:700, fontSize:13, minWidth:48, textAlign:'right', color:'var(--green)' }}>
         ₹{((item.effective_price??item.price)*item.qty).toFixed(0)}
       </div>
     </div>

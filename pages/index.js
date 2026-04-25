@@ -308,12 +308,27 @@ export default function ShopPage() {
     return ()=>supabase.removeChannel(ch)
   },[user])
 
-  useEffect(()=>{
-    const ch=supabase.channel('products_live')
-      .on('postgres_changes',{ event:'*',schema:'public',table:'products' },fetchProducts)
-      .subscribe()
-    return ()=>supabase.removeChannel(ch)
-  },[])
+  useEffect(() => {
+  // Refresh products when any product changes (price, stock etc)
+  const prodChannel = supabase.channel('products_live')
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'products'
+    }, fetchProducts)
+    .subscribe()
+
+  // Also refresh products when any order is updated
+  // (because order confirmation/cancellation triggers stock changes)
+  const orderChannel = supabase.channel('orders_stock_watch')
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'orders'
+    }, fetchProducts)
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(prodChannel)
+    supabase.removeChannel(orderChannel)
+  }
+}, [])
 
   async function fetchProducts() {
     setLoading(true)

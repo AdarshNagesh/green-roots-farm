@@ -12,7 +12,7 @@ const CATEGORIES     = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const UNITS          = ['kg','g','piece','bunch','dozen','litre','pack','box']
 const BUCKET         = 'product-images'
 const ORDER_STATUSES = ['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled']
-const BLANK          = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'' }
+const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'', min_order_value:'' }
 const LOW_STOCK      = 5
 const PER_PAGE       = { products:10, orders:8, customers:10 }
 
@@ -122,7 +122,7 @@ export default function AdminPage() {
         name:form.name, description:form.description, price:parseFloat(form.price),
         unit:form.unit, category:form.category, image_url:imageUrl, in_stock:form.in_stock,
         is_visible: form.is_visible !== false,
-        quantity_options:qty_opts.length>0?qty_opts:null, stock_quantity:stockQty,
+        quantity_options:qty_opts.length>0?qty_opts:null, stock_quantity:stockQty,min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),
       }
       const { error }=editing
         ? await supabase.from('products').update(payload).eq('id',form.id)
@@ -130,7 +130,7 @@ export default function AdminPage() {
       if(error) throw error
       showToast(editing?'✅ Updated — customers notified!':'✅ Added — customers notified!')
       await notifyCustomersOfProduct(
-        { ...payload, emoji: form.emoji || '🌿', name: form.name },
+        { ...payload, min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),emoji: form.emoji || '🌿', name: form.name },
         !editing
       )
       resetForm(); loadAll()
@@ -151,7 +151,7 @@ export default function AdminPage() {
   }
 
   function startEdit(prod) {
-    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false })
+    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false,min_order_value: prod.min_order_value ?? ''})
     setEditing(true); setImagePreview(prod.image_url||null); setImageFile(null); setTab('products')
     window.scrollTo({top:0,behavior:'smooth'})
   }
@@ -377,6 +377,21 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+<div style={{ marginBottom:12 }}>
+  <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+    Minimum Order Value (₹)
+    <span style={{ fontWeight:400 }}> — optional</span>
+  </div>
+  <input className="inp" type="number" min="0" step="1"
+    value={form.min_order_value}
+    onChange={e => set('min_order_value', e.target.value)}
+    placeholder="e.g. 90 (leave blank for no minimum)" />
+  {form.min_order_value && (
+    <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>
+      Customers must add at least ₹{form.min_order_value} worth of this product
+    </div>
+  )}
+</div>
 
               {/* Visibility + In stock toggles */}
               <div style={{marginBottom:10,display:'flex',alignItems:'center',gap:10}}>
@@ -521,16 +536,31 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <div style={{fontWeight:600,fontSize:15}}>
-                {hasOrderFilters?`${filteredOrders.length} of ${orders.length} orders`:`All Orders (${orders.length})`}
-              </div>
-              {filteredOrders.length>0&&(
-                <div style={{fontSize:13,color:'var(--muted)'}}>
-                  Total: <span style={{color:'var(--green)',fontWeight:700}}>₹{filteredRevenue.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-                </div>
-              )}
-            </div>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+  <div style={{fontWeight:600,fontSize:15}}>
+    {hasOrderFilters?`${filteredOrders.length} of ${orders.length} orders`:`All Orders (${orders.length})`}
+  </div>
+  <div style={{display:'flex',gap:10,alignItems:'center'}}>
+    {filteredOrders.length>0&&(
+      <div style={{fontSize:13,color:'var(--muted)'}}>
+        Total: <span style={{color:'var(--green)',fontWeight:700}}>₹{filteredRevenue.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      </div>
+    )}
+    <button
+      onClick={() => {
+        const params = new URLSearchParams()
+        if (fDateFrom) params.set('from', fDateFrom)
+        if (fDateTo)   params.set('to', fDateTo)
+        if (fStatus !== 'All') params.set('status', fStatus)
+        window.open(`/api/export/orders?${params.toString()}`, '_blank')
+      }}
+      style={{fontSize:12,padding:'6px 14px',border:'1.5px solid var(--green)',
+        borderRadius:8,background:'var(--green-pale)',color:'var(--green)',
+        cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:5}}>
+      📥 Export CSV
+    </button>
+  </div>
+</div>
 
             {filteredOrders.length===0
               ?<div className="card" style={{padding:48,textAlign:'center',color:'var(--muted)'}}>

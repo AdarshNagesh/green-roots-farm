@@ -10,8 +10,44 @@ const serif      = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const LOW_STOCK  = 5
 
+// ── Notify Me Button ──────────────────────────────────────────────────────────
+function NotifyMeButton({ productId, userId, userEmail }) {
+  const [onList, setOnList]   = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/waitlist?user_id=${userId}&product_id=${productId}`)
+      .then(r => r.json())
+      .then(d => setOnList(d.on_waitlist))
+      .catch(() => {})
+  }, [])
+
+  async function toggle() {
+    setLoading(true)
+    const method = onList ? 'DELETE' : 'POST'
+    await fetch('/api/waitlist', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, user_email: userEmail, product_id: productId }),
+    })
+    setOnList(!onList)
+    setLoading(false)
+  }
+
+  return (
+    <button onClick={toggle} disabled={loading}
+      style={{ padding:'7px 12px', fontSize:11, fontWeight:600, borderRadius:8, cursor:'pointer',
+        border:`1.5px solid ${onList ? 'var(--green)' : 'var(--border)'}`,
+        background: onList ? 'var(--green-pale)' : 'transparent',
+        color: onList ? 'var(--green)' : 'var(--muted)',
+        fontFamily:'DM Sans, sans-serif' }}>
+      {loading ? '…' : onList ? '🔔 Notifying' : '🔔 Notify Me'}
+    </button>
+  )
+}
+
 // ── Product Detail Modal ──────────────────────────────────────────────────────
-function ProductModal({ product, onClose, onAddToCart }) {
+function ProductModal({ product, onClose, onAddToCart, user, onAuthOpen }) {
   const opts = product.quantity_options || []
   const [selectedIdx, setSelectedIdx] = useState(0)
 
@@ -24,7 +60,6 @@ function ProductModal({ product, onClose, onAddToCart }) {
   const isLow        = hasStock && stockCount > 0 && stockCount <= LOW_STOCK
   const isOutOfStock = !product.in_stock || (hasStock && stockCount === 0)
 
-  // Close on Escape key
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -40,11 +75,10 @@ function ProductModal({ product, onClose, onAddToCart }) {
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}
       style={{ alignItems:'center', padding:20 }}>
-      <div style={{
-        background:'var(--card)', borderRadius:20, width:'100%', maxWidth:560,
+      <div style={{ background:'var(--card)', borderRadius:20, width:'100%', maxWidth:560,
         maxHeight:'90vh', overflow:'hidden', display:'flex', flexDirection:'column',
-        boxShadow:'0 24px 64px rgba(0,0,0,0.22)',
-      }}>
+        boxShadow:'0 24px 64px rgba(0,0,0,0.22)' }}>
+
         {/* Image */}
         <div style={{ position:'relative', height:260, background:'var(--green-pale)', flexShrink:0 }}>
           {product.image_url
@@ -52,14 +86,12 @@ function ProductModal({ product, onClose, onAddToCart }) {
                 style={{ width:'100%', height:'100%', objectFit:'cover' }} />
             : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:80 }}>🌿</div>
           }
-          {/* Close button */}
           <button onClick={onClose}
             style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:'50%',
               background:'rgba(0,0,0,0.55)', color:'#fff', border:'none', cursor:'pointer',
               fontSize:18, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700 }}>
             ✕
           </button>
-          {/* Category + stock badges */}
           <div style={{ position:'absolute', top:12, left:12, display:'flex', gap:6 }}>
             <span className="pill" style={{ background:'rgba(255,255,255,0.92)', color:'var(--gold)',
               boxShadow:'0 1px 6px rgba(0,0,0,0.12)' }}>{product.category}</span>
@@ -76,11 +108,10 @@ function ProductModal({ product, onClose, onAddToCart }) {
           </div>
         </div>
 
-        {/* Content — scrollable */}
+        {/* Content */}
         <div style={{ padding:'24px 28px 28px', overflowY:'auto', flex:1 }}>
           <div style={{ ...serif, fontSize:24, fontWeight:700, marginBottom:6 }}>{product.name}</div>
 
-          {/* Price */}
           <div style={{ display:'flex', alignItems:'baseline', gap:6, marginBottom:16 }}>
             <span style={{ ...serif, fontSize:28, fontWeight:700, color:'var(--green)' }}>
               ₹{displayPrice % 1 === 0 ? displayPrice.toFixed(0) : displayPrice.toFixed(2)}
@@ -90,18 +121,14 @@ function ProductModal({ product, onClose, onAddToCart }) {
             </span>
           </div>
 
-          {/* Full description */}
           {product.description && (
             <div style={{ marginBottom:20 }}>
               <div style={{ fontSize:12, fontWeight:600, color:'var(--muted)', textTransform:'uppercase',
                 letterSpacing:1, marginBottom:8 }}>About this product</div>
-              <div style={{ fontSize:14, color:'var(--text)', lineHeight:1.8 }}>
-                {product.description}
-              </div>
+              <div style={{ fontSize:14, color:'var(--text)', lineHeight:1.8 }}>{product.description}</div>
             </div>
           )}
 
-          {/* Stock info */}
           {hasStock && !isOutOfStock && (
             <div style={{ marginBottom:16, padding:'10px 14px', background:'var(--green-pale)',
               borderRadius:10, display:'flex', alignItems:'center', gap:8 }}>
@@ -113,7 +140,6 @@ function ProductModal({ product, onClose, onAddToCart }) {
             </div>
           )}
 
-          {/* Quantity options */}
           {opts.length > 0 && (
             <div style={{ marginBottom:20 }}>
               <div style={{ fontSize:12, fontWeight:600, color:'var(--muted)', textTransform:'uppercase',
@@ -137,13 +163,20 @@ function ProductModal({ product, onClose, onAddToCart }) {
             </div>
           )}
 
-          {/* Add to cart button */}
-          <button className="btn-g"
-            style={{ width:'100%', padding:'13px', fontSize:16, borderRadius:12 }}
-            disabled={isOutOfStock}
-            onClick={handleAdd}>
-            {isOutOfStock ? 'Currently Unavailable' : `Add to Cart — ₹${displayPrice%1===0?displayPrice.toFixed(0):displayPrice.toFixed(2)}`}
-          </button>
+          {/* Add to cart or Notify Me */}
+          {isOutOfStock ? (
+            user
+              ? <NotifyMeButton productId={product.id} userId={user.id} userEmail={user.email} />
+              : <button className="btn-o" style={{ width:'100%', padding:'13px', fontSize:15, borderRadius:12 }}
+                  onClick={() => { onClose(); onAuthOpen() }}>
+                  🔔 Sign in to get notified
+                </button>
+          ) : (
+            <button className="btn-g" style={{ width:'100%', padding:'13px', fontSize:16, borderRadius:12 }}
+              onClick={handleAdd}>
+              Add to Cart — ₹{displayPrice%1===0?displayPrice.toFixed(0):displayPrice.toFixed(2)}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -151,8 +184,8 @@ function ProductModal({ product, onClose, onAddToCart }) {
 }
 
 // ── Product Card ──────────────────────────────────────────────────────────────
-function ProductCard({ product, onAddToCart, onViewDetail }) {
-  const opts         = product.quantity_options || []
+function ProductCard({ product, user, onAddToCart, onViewDetail, onAuthOpen }) {
+  const opts        = product.quantity_options || []
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   const selectedOpt  = opts[selectedIdx] || null
@@ -164,10 +197,9 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
   const isLow        = hasStock && stockCount > 0 && stockCount <= LOW_STOCK
   const isOutOfStock = !product.in_stock || (hasStock && stockCount === 0)
 
-  // Check if description is long enough to need "read more"
-  const LIMIT        = 60
-  const descLong     = product.description && product.description.length > LIMIT
-  const descPreview  = descLong ? product.description.slice(0, LIMIT).trimEnd() + '…' : product.description
+  const LIMIT       = 60
+  const descLong    = product.description && product.description.length > LIMIT
+  const descPreview = descLong ? product.description.slice(0, LIMIT).trimEnd() + '…' : product.description
 
   function handleAdd(e) {
     e.stopPropagation()
@@ -177,7 +209,7 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
 
   return (
     <div className="prod-card">
-      {/* Image — click opens modal */}
+      {/* Image */}
       <div style={{ position:'relative', height:180, background:'var(--green-pale)', overflow:'hidden', cursor:'pointer' }}
         onClick={() => onViewDetail(product)}>
         {product.image_url
@@ -209,13 +241,11 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
 
       {/* Card body */}
       <div style={{ padding:'14px 16px 16px' }}>
-        {/* Name — click opens modal */}
         <div style={{ fontWeight:600, fontSize:15, marginBottom:4, cursor:'pointer' }}
           onClick={() => onViewDetail(product)}>
           {product.name}
         </div>
 
-        {/* Description with Read more */}
         {product.description && (
           <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.5, marginBottom:8 }}>
             {descPreview}
@@ -229,7 +259,6 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
           </div>
         )}
 
-        {/* Stock indicator */}
         {hasStock && !isLow && !isOutOfStock && (
           <div style={{ fontSize:11, color:'var(--green)', fontWeight:500, marginBottom:8,
             display:'flex', alignItems:'center', gap:4 }}>
@@ -238,7 +267,6 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
           </div>
         )}
 
-        {/* Quantity options */}
         {opts.length > 0 && (
           <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:6,
@@ -257,7 +285,7 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
           </div>
         )}
 
-        {/* Price + Add */}
+        {/* Price + button */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop: opts.length>0 ? 4 : 8 }}>
           <div>
             <span style={{ ...serif, fontSize:20, fontWeight:700, color:'var(--green)' }}>
@@ -267,10 +295,16 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
               {opts.length > 0 ? ` / ${displayLabel}` : ` / ${product.unit}`}
             </span>
           </div>
-          <button className="btn-g" style={{ padding:'7px 15px', fontSize:12 }}
-            disabled={isOutOfStock} onClick={handleAdd}>
-            {isOutOfStock ? 'Unavailable' : '+ Add'}
-          </button>
+
+          {isOutOfStock ? (
+            user
+              ? <NotifyMeButton productId={product.id} userId={user.id} userEmail={user.email} />
+              : <button className="btn-o" style={{ padding:'7px 12px', fontSize:11 }}
+                  onClick={onAuthOpen}>🔔 Notify Me</button>
+          ) : (
+            <button className="btn-g" style={{ padding:'7px 15px', fontSize:12 }}
+              onClick={handleAdd}>+ Add</button>
+          )}
         </div>
       </div>
     </div>
@@ -279,64 +313,60 @@ function ProductCard({ product, onAddToCart, onViewDetail }) {
 
 // ── Main Shop Page ────────────────────────────────────────────────────────────
 export default function ShopPage() {
-  const [user, setUser]           = useState(null)
-  const [products, setProducts]   = useState([])
-  const [cart, setCart]           = useState([])
-  const [notifs, setNotifs]       = useState([])
-  const [filter, setFilter]       = useState('All')
-  const [search, setSearch]       = useState('')
-  const [showAuth, setShowAuth]   = useState(false)
-  const [showCart, setShowCart]   = useState(false)
-  const [modalProduct, setModalProduct] = useState(null)   // product detail modal
-  const [toast, setToast]         = useState('')
-  const [loading, setLoading]     = useState(true)
+  const [user, setUser]                 = useState(null)
+  const [products, setProducts]         = useState([])
+  const [cart, setCart]                 = useState([])
+  const [notifs, setNotifs]             = useState([])
+  const [filter, setFilter]             = useState('All')
+  const [search, setSearch]             = useState('')
+  const [showAuth, setShowAuth]         = useState(false)
+  const [showCart, setShowCart]         = useState(false)
+  const [modalProduct, setModalProduct] = useState(null)
+  const [toast, setToast]               = useState('')
+  const [loading, setLoading]           = useState(true)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => setUser(session?.user??null))
-    const { data:{ subscription } } = supabase.auth.onAuthStateChange((_e,session) => setUser(session?.user??null))
+    const { data:{ subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user??null))
     fetchProducts()
     return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
-    if (!user||isAdmin(user)) return
+    if (!user || isAdmin(user)) return
     fetchNotifs(user.id)
-    const ch=supabase.channel('notifs_'+user.id)
-      .on('postgres_changes',{ event:'INSERT',schema:'public',table:'notifications',filter:`user_id=eq.${user.id}` },
-        payload=>{ setNotifs(prev=>[payload.new,...prev]); toast_show(payload.new.type==='order'?'📦 Order update!':'🌿 New farm update!') })
+    const ch = supabase.channel('notifs_'+user.id)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'notifications', filter:`user_id=eq.${user.id}` },
+        payload => {
+          setNotifs(prev => [payload.new, ...prev])
+          toast_show(payload.new.type==='order' ? '📦 Order update!' : '🌿 New farm update!')
+        })
       .subscribe()
-    return ()=>supabase.removeChannel(ch)
-  },[user])
+    return () => supabase.removeChannel(ch)
+  }, [user])
 
   useEffect(() => {
-  // Refresh products when any product changes (price, stock etc)
-  const prodChannel = supabase.channel('products_live')
-    .on('postgres_changes', {
-      event: '*', schema: 'public', table: 'products'
-    }, fetchProducts)
-    .subscribe()
-
-  // Also refresh products when any order is updated
-  // (because order confirmation/cancellation triggers stock changes)
-  const orderChannel = supabase.channel('orders_stock_watch')
-    .on('postgres_changes', {
-      event: 'UPDATE', schema: 'public', table: 'orders'
-    }, fetchProducts)
-    .subscribe()
-
-  return () => {
-    supabase.removeChannel(prodChannel)
-    supabase.removeChannel(orderChannel)
-  }
-}, [])
+    const prodChannel = supabase.channel('products_live')
+      .on('postgres_changes', { event:'*', schema:'public', table:'products' }, fetchProducts)
+      .subscribe()
+    const orderChannel = supabase.channel('orders_stock_watch')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders' }, fetchProducts)
+      .subscribe()
+    return () => {
+      supabase.removeChannel(prodChannel)
+      supabase.removeChannel(orderChannel)
+    }
+  }, [])
 
   async function fetchProducts() {
     setLoading(true)
-    const { data }=await supabase.from('products').select('*').order('created_at',{ascending:false})
+    const { data } = await supabase.from('products').select('*').order('created_at', { ascending:false })
     setProducts(data||[]); setLoading(false)
   }
+
   async function fetchNotifs(userId) {
-    const { data }=await supabase.from('notifications').select('*').eq('user_id',userId).order('created_at',{ascending:false}).limit(50)
+    const { data } = await supabase.from('notifications').select('*')
+      .eq('user_id', userId).order('created_at', { ascending:false }).limit(50)
     setNotifs(data||[])
   }
 
@@ -349,22 +379,15 @@ export default function ShopPage() {
 
     setCart(prev => {
       const ex = prev.find(i => i.cartKey === cartKey)
-      const currentQtyInCart = ex ? ex.qty : 0
-
-      // Stock check — only if stock is tracked
       if (prod.stock_quantity !== null && prod.stock_quantity !== undefined) {
-        // Total stock units already in cart for this product (all options combined)
-        const allCartUnitsForProd = prev
-          .filter(i => i.id === prod.id)
-          .reduce((s, i) => s + (i.qty * (i.multiplier || 1)), 0)
-        const newUnits = allCartUnitsForProd + multiplier
-        if (newUnits > prod.stock_quantity) {
+        const allCartUnits = prev.filter(i => i.id === prod.id)
+          .reduce((s, i) => s + (i.qty * (i.multiplier||1)), 0)
+        if (allCartUnits + multiplier > prod.stock_quantity) {
           toast_show(`Only ${prod.stock_quantity} ${prod.unit} available — can't add more`)
-          return prev // no change
+          return prev
         }
       }
-
-      if (ex) return prev.map(i => i.cartKey === cartKey ? { ...i, qty: i.qty + 1 } : i)
+      if (ex) return prev.map(i => i.cartKey === cartKey ? { ...i, qty: i.qty+1 } : i)
       return [...prev, {
         ...prod, cartKey,
         effective_price: parseFloat(effectivePrice.toFixed(2)),
@@ -378,31 +401,26 @@ export default function ShopPage() {
 
   function updateQty(cartKey, qty) {
     if (qty < 1) { setCart(prev => prev.filter(i => i.cartKey !== cartKey)); return }
-
     setCart(prev => {
       const item = prev.find(i => i.cartKey === cartKey)
       if (!item) return prev
-
-      // Stock check when increasing qty
       if (qty > item.qty && item.stock_quantity !== null && item.stock_quantity !== undefined) {
-        const allCartUnitsForProd = prev
-          .filter(i => i.id === item.id)
-          .reduce((s, i) => s + (i.cartKey === cartKey ? qty * (i.multiplier||1) : i.qty * (i.multiplier||1)), 0)
-        if (allCartUnitsForProd > item.stock_quantity) {
+        const allCartUnits = prev.filter(i => i.id === item.id)
+          .reduce((s, i) => s + (i.cartKey === cartKey ? qty*(i.multiplier||1) : i.qty*(i.multiplier||1)), 0)
+        if (allCartUnits > item.stock_quantity) {
           toast_show(`Only ${item.stock_quantity} ${item.unit} available`)
-          return prev // block increase
+          return prev
         }
       }
-
       return prev.map(i => i.cartKey === cartKey ? { ...i, qty } : i)
     })
   }
 
-  function toast_show(msg) { setToast(msg); setTimeout(()=>setToast(''),3000) }
+  function toast_show(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
-  const cartCount = cart.reduce((s,i)=>s+i.qty,0)
-  const filtered  = products.filter(p=>
-    (filter==='All'||p.category===filter) &&
+  const cartCount = cart.reduce((s,i) => s+i.qty, 0)
+  const filtered  = products.filter(p =>
+    (filter==='All' || p.category===filter) &&
     p.name.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -414,8 +432,8 @@ export default function ShopPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <Header user={user} cartCount={cartCount} onCartOpen={()=>setShowCart(true)}
-        onAuthOpen={()=>setShowAuth(true)} notifs={notifs} setNotifs={setNotifs} />
+      <Header user={user} cartCount={cartCount} onCartOpen={() => setShowCart(true)}
+        onAuthOpen={() => setShowAuth(true)} notifs={notifs} setNotifs={setNotifs} />
 
       <main style={{ maxWidth:1120, margin:'0 auto', padding:'28px 20px' }}>
 
@@ -436,7 +454,7 @@ export default function ShopPage() {
               Organically grown produce harvested at peak ripeness — from our soil to your table.
             </div>
             {!user && (
-              <button className="btn-g" onClick={()=>setShowAuth(true)}
+              <button className="btn-g" onClick={() => setShowAuth(true)}
                 style={{ background:'rgba(255,255,255,0.2)', border:'1.5px solid rgba(255,255,255,0.5)', padding:'10px 22px' }}>
                 Register for Updates 🔔
               </button>
@@ -450,15 +468,15 @@ export default function ShopPage() {
           <div style={{ position:'relative', flex:'1 1 200px' }}>
             <span style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', fontSize:14, color:'var(--muted)' }}>🔍</span>
             <input className="inp" style={{ paddingLeft:34 }} placeholder="Search produce…"
-              value={search} onChange={e=>setSearch(e.target.value)} />
+              value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {['All',...CATEGORIES].map(cat=>(
-              <button key={cat} onClick={()=>setFilter(cat)}
+            {['All',...CATEGORIES].map(cat => (
+              <button key={cat} onClick={() => setFilter(cat)}
                 style={{ padding:'6px 14px', borderRadius:20, cursor:'pointer', fontSize:12, fontWeight:500,
-                  border:`1.5px solid ${filter===cat?'var(--green)':'var(--border)'}`,
-                  background:filter===cat?'var(--green)':'transparent',
-                  color:filter===cat?'#fff':'var(--text)', transition:'all .2s' }}>
+                  border:`1.5px solid ${filter===cat ? 'var(--green)' : 'var(--border)'}`,
+                  background: filter===cat ? 'var(--green)' : 'transparent',
+                  color: filter===cat ? '#fff' : 'var(--text)', transition:'all .2s' }}>
                 {cat}
               </button>
             ))}
@@ -470,20 +488,24 @@ export default function ShopPage() {
           <div style={{ textAlign:'center', padding:'80px 20px', color:'var(--muted)' }}>
             <div style={{ fontSize:36, marginBottom:12 }}>🌱</div>Loading fresh produce…
           </div>
-        ) : filtered.length===0 ? (
+        ) : filtered.length === 0 ? (
           <div style={{ textAlign:'center', padding:'80px 20px', color:'var(--muted)' }}>
-            <div style={{ fontSize:52, marginBottom:12 }}>{products.length===0?'🌱':'🔍'}</div>
+            <div style={{ fontSize:52, marginBottom:12 }}>{products.length===0 ? '🌱' : '🔍'}</div>
             <div style={{ fontSize:16, fontWeight:600, marginBottom:6 }}>
-              {products.length===0?'No products yet':'No matching products'}
+              {products.length===0 ? 'No products yet' : 'No matching products'}
             </div>
-            <div style={{ fontSize:13 }}>{products.length===0?'Check back soon!':'Try a different search or category'}</div>
+            <div style={{ fontSize:13 }}>
+              {products.length===0 ? 'Check back soon!' : 'Try a different search or category'}
+            </div>
           </div>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:18 }}>
-            {filtered.map(p=>(
+            {filtered.map(p => (
               <ProductCard key={p.id} product={p}
+                user={user}
                 onAddToCart={addToCart}
-                onViewDetail={setModalProduct} />
+                onViewDetail={setModalProduct}
+                onAuthOpen={() => setShowAuth(true)} />
             ))}
           </div>
         )}
@@ -492,19 +514,21 @@ export default function ShopPage() {
       <Footer />
       <FloatingWhatsApp />
 
-      {/* Product detail modal */}
       {modalProduct && (
         <ProductModal
           product={modalProduct}
+          user={user}
           onClose={() => setModalProduct(null)}
-          onAddToCart={(prod, opt) => { addToCart(prod, opt) }}
-        />
+          onAddToCart={(prod, opt) => addToCart(prod, opt)}
+          onAuthOpen={() => setShowAuth(true)} />
       )}
 
-      {showAuth && <AuthModal onClose={()=>setShowAuth(false)} />}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       {showCart && (
         <CartSidebar cart={cart} user={user}
-          onClose={()=>setShowCart(false)} onUpdateQty={updateQty} onClearCart={()=>setCart([])} />
+          onClose={() => setShowCart(false)}
+          onUpdateQty={updateQty}
+          onClearCart={() => setCart([])} />
       )}
 
       {toast && (

@@ -43,9 +43,9 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   const [pointsBalance, setPointsBalance] = useState(0)
   const [usePoints, setUsePoints]         = useState(false)
   const [pointsToRedeem, setPointsToRedeem] = useState(0)
-
+const [pointsRate, setPointsRate] = useState(1)
   const baseTotal  = cart.reduce((s, i) => s + (i.effective_price ?? i.price) * i.qty, 0)
-  const discount   = usePoints ? Math.min(pointsToRedeem, baseTotal) : 0
+ const discount = usePoints ? Math.min(pointsToRedeem * pointsRate, baseTotal) : 0
   const total      = Math.max(0, baseTotal - discount)
   const count      = cart.reduce((s, i) => s + i.qty, 0)
 
@@ -59,17 +59,20 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   }, [])
 
   // Fetch points balance when checkout step opens
-  useEffect(() => {
-    if (step === 'checkout' && user) {
-      fetch(`/api/credits/balance?user_id=${user.id}`)
-        .then(r => r.json())
-        .then(d => {
-          setPointsBalance(d.points_balance || 0)
-          setPointsToRedeem(d.points_balance || 0)
-        })
-        .catch(() => {})
-    }
-  }, [step, user])
+ useEffect(() => {
+  if (step === 'checkout' && user) {
+    fetch(`/api/credits/balance?user_id=${user.id}`)
+      .then(r => r.json())
+      .then(d => {
+        setPointsBalance(d.points_balance || 0)
+        setPointsToRedeem(d.points_balance || 0)
+      })
+    // Fetch points rate
+    fetch('/api/settings?key=points_to_rupee_rate')
+      .then(r => r.json())
+      .then(d => setPointsRate(parseFloat(d.value) || 1))
+  }
+}, [step, user])
 
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
 
@@ -307,7 +310,7 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: usePoints ? 10 : 0 }}>
                 <div>
                   <div style={{ fontWeight:600, fontSize:13, color:'var(--green)' }}>
-                    🎁 You have {pointsBalance} points (₹{pointsBalance} off)
+                    🎁 You have {pointsBalance} points (₹{(pointsBalance * pointsRate).toFixed(0)} off)
                   </div>
                   <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>
                     Earn more points with every purchase

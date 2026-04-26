@@ -16,6 +16,7 @@ const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', desc
 const LOW_STOCK      = 5
 const PER_PAGE       = { products:10, orders:8, customers:10 }
 
+
 const PRESETS = {
   'kg options':    [{ label:'250g', multiplier:0.25 },{ label:'500g', multiplier:0.5 },{ label:'1 kg', multiplier:1 },{ label:'2 kg', multiplier:2 }],
   'litre options': [{ label:'250 ml', multiplier:0.25 },{ label:'500 ml', multiplier:0.5 },{ label:'1 litre', multiplier:1 }],
@@ -42,7 +43,8 @@ export default function AdminPage() {
   const [toast, setToast]                 = useState('')
   const [updatingOrder, setUpdatingOrder] = useState(null)
   const [stats, setStats]                 = useState({ products:0, orders:0, customers:0, revenue:0 })
-
+const [settings, setSettings]   = useState({ points_to_rupee_rate:'1', referral_reward_points:'20' })
+const [settingsSaved, setSettingsSaved] = useState(false)
   const [fCustomer,  setFCustomer]  = useState('')
   const [fProduct,   setFProduct]   = useState('')
   const [fDateFrom,  setFDateFrom]  = useState('')
@@ -73,7 +75,28 @@ export default function AdminPage() {
     setStats({ products:(p.data||[]).length, orders:(o.data||[]).length,
       revenue:(o.data||[]).reduce((s,o)=>s+Number(o.total),0), customers:0 })
     loadCustomers()
+    loadSettings()
   }
+
+  async function loadSettings() {
+  const res = await fetch('/api/settings')
+  if (res.ok) {
+    const data = await res.json()
+    const map = Object.fromEntries(data.map(s => [s.key, s.value]))
+    setSettings(s => ({ ...s, ...map }))
+  }
+}
+
+async function saveSettings() {
+  await Promise.all(Object.entries(settings).map(([key, value]) =>
+    fetch('/api/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    })
+  ))
+  setSettingsSaved(true)
+  setTimeout(() => setSettingsSaved(false), 2500)
+}
 
   async function loadCustomers() {
     const res = await fetch('/api/admin/customers')
@@ -245,11 +268,11 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div style={{display:'flex',borderBottom:'2px solid var(--border)',marginBottom:24}}>
-          {['products','orders','customers'].map(t=>(
-            <button key={t} className={`tab-btn ${tab===t?'active':''}`} onClick={()=>setTab(t)}>
-              {t==='products'?'🌿 Products':t==='orders'?'📦 Orders':'👥 Customers'}
-            </button>
-          ))}
+         {['products','orders','customers','settings'].map(t=>(
+  <button key={t} className={`tab-btn ${tab===t?'active':''}`} onClick={()=>setTab(t)}>
+    {t==='products'?'🌿 Products':t==='orders'?'📦 Orders':t==='customers'?'👥 Customers':'⚙️ Settings'}
+  </button>
+))}
         </div>
 
         {/* ── PRODUCTS TAB ── */}
@@ -662,6 +685,53 @@ export default function AdminPage() {
             }
           </div>
         )}
+{/* ── SETTINGS TAB ── */}
+{tab==='settings' && (
+  <div style={{maxWidth:520}}>
+    <div style={{fontWeight:600,fontSize:15,marginBottom:20}}>⚙️ Farm Settings</div>
+
+    <div className="card" style={{padding:24,marginBottom:16}}>
+      <div style={{fontWeight:600,fontSize:14,color:'var(--green)',marginBottom:18}}>
+        ⭐ Loyalty Points
+      </div>
+
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:12,color:'var(--muted)',fontWeight:600,marginBottom:6,
+          textTransform:'uppercase',letterSpacing:0.5}}>Points to Rupee Rate</div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:13,color:'var(--muted)'}}>1 point =</span>
+          <input className="inp" type="number" min="0.1" step="0.1"
+            style={{width:100}}
+            value={settings.points_to_rupee_rate}
+            onChange={e=>setSettings(s=>({...s,points_to_rupee_rate:e.target.value}))} />
+          <span style={{fontSize:13,color:'var(--muted)'}}>₹</span>
+        </div>
+        <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+          e.g. if set to 0.5 → 10 points = ₹5 discount at checkout
+        </div>
+      </div>
+
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:12,color:'var(--muted)',fontWeight:600,marginBottom:6,
+          textTransform:'uppercase',letterSpacing:0.5}}>Referral Reward Points</div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <input className="inp" type="number" min="0" step="1"
+            style={{width:100}}
+            value={settings.referral_reward_points}
+            onChange={e=>setSettings(s=>({...s,referral_reward_points:e.target.value}))} />
+          <span style={{fontSize:13,color:'var(--muted)'}}>points when friend places first order</span>
+        </div>
+        <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+          Currently: referrer earns {settings.referral_reward_points} points = ₹{(parseFloat(settings.referral_reward_points||0)*parseFloat(settings.points_to_rupee_rate||1)).toFixed(0)} value
+        </div>
+      </div>
+
+      <button className="btn-g" style={{padding:'10px 24px'}} onClick={saveSettings}>
+        {settingsSaved ? '✅ Saved!' : '💾 Save Settings'}
+      </button>
+    </div>
+  </div>
+)}
       </main>
 
       {toast&&(

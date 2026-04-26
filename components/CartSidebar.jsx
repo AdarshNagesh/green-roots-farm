@@ -61,19 +61,19 @@ const [pointsRate, setPointsRate] = useState(1)
 
   // Fetch points balance when checkout step opens
 useEffect(() => {
-  if (step === 'checkout' && user) {
+  if (user) {   // ← remove the step === 'checkout' condition
     fetch(`/api/credits/balance?user_id=${user.id}`)
       .then(r => r.json())
       .then(d => {
         setPointsBalance(d.points_balance || 0)
         setPointsToRedeem(d.points_balance || 0)
-        setLoyaltyEnabled(d.loyalty_enabled || false)  // ← add this
+        setLoyaltyEnabled(d.loyalty_enabled || false)
       })
     fetch('/api/settings?key=points_to_rupee_rate')
       .then(r => r.json())
       .then(d => setPointsRate(parseFloat(d.value) || 1))
   }
-}, [step, user])
+}, [user])   // ← trigger on user, not step
 
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
 
@@ -241,7 +241,7 @@ useEffect(() => {
         {/* ── CART ITEMS ── */}
         {step==='cart' && cart.length>0 && <>
           <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:20 }}>
-            {cart.map(item => <CartItem key={item.cartKey||item.id} item={item} onUpdateQty={onUpdateQty} />)}
+           {cart.map(item => <CartItem key={item.cartKey||item.id} item={item} onUpdateQty={onUpdateQty} loyaltyEnabled={loyaltyEnabled} />)}
           </div>
 
           {validateMinOrders(cart).length > 0 && (
@@ -411,7 +411,7 @@ useEffect(() => {
   )
 }
 
-function CartItem({ item, onUpdateQty }) {
+function CartItem({ item, onUpdateQty, loyaltyEnabled }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:11,
       padding:'11px 13px', background:'var(--bg)', borderRadius:12 }}>
@@ -427,11 +427,11 @@ function CartItem({ item, onUpdateQty }) {
           {item.selected_option || `₹${item.price}/${item.unit}`}
           {item.selected_option && ` · ₹${(item.effective_price ?? item.price).toFixed(0)}`}
         </div>
-        {item.points_per_unit > 0 && (
-          <div style={{ fontSize:10, color:'var(--green)', fontWeight:500, marginTop:2 }}>
-            🎁 Earn {Math.floor(item.points_per_unit * item.qty)} pts
-          </div>
-        )}
+        {loyaltyEnabled && item.points_per_unit > 0 && (
+  <div style={{ fontSize:10, color:'var(--green)', fontWeight:500, marginTop:2 }}>
+    🎁 Earn {Math.floor(item.points_per_unit * item.qty)} pts
+  </div>
+)}
         {item.min_order_value && (item.effective_price ?? item.price) * item.qty < item.min_order_value && (
           <div style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>
             Min order ₹{item.min_order_value}

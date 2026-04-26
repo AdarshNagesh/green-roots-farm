@@ -580,8 +580,12 @@ export default function AdminPage() {
                             <div style={{fontSize:12,color:'var(--muted)'}}>📍 {o.address}</div>
                             <div style={{fontSize:12,color:'var(--muted)'}}>📞 {o.phone}</div>
                             <div style={{fontSize:12,color:'var(--muted)'}}>
-                              {o.payment_method==='razorpay'?'💳 Paid Online':'💵 Cash on Delivery'}
-                              {o.payment_status==='paid'&&<span style={{color:'var(--green)',fontWeight:600}}> ✓</span>}
+                             {o.payment_method==='razorpay'
+  ? o.payment_status==='paid'
+    ? '💳 Paid Online'
+    : '⏳ Online Payment Pending'
+  : '💵 Cash on Delivery'}
+{o.payment_status==='paid'&&<span style={{color:'var(--green)',fontWeight:600}}> ✓</span>}
                             </div>
                           </div>
                           <div style={{textAlign:'right'}}>

@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
   const { data, error } = await adminClient
     .from('profiles')
-    .select('id, name, email, phone, created_at')
+    .select('id, name, email, phone, created_at, points_balance, loyalty_enabled')
     .eq('is_admin', false)
     .order('created_at', { ascending: false })
   if (error) return res.status(500).json({ error: error.message })

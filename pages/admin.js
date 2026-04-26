@@ -12,7 +12,7 @@ const CATEGORIES     = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const UNITS          = ['kg','g','piece','bunch','dozen','litre','pack','box']
 const BUCKET         = 'product-images'
 const ORDER_STATUSES = ['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled']
-const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'', min_order_value:'' }
+const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'', min_order_value:'',points_per_unit:'0' }
 const LOW_STOCK      = 5
 const PER_PAGE       = { products:10, orders:8, customers:10 }
 
@@ -122,7 +122,7 @@ export default function AdminPage() {
         name:form.name, description:form.description, price:parseFloat(form.price),
         unit:form.unit, category:form.category, image_url:imageUrl, in_stock:form.in_stock,
         is_visible: form.is_visible !== false,
-        quantity_options:qty_opts.length>0?qty_opts:null, stock_quantity:stockQty,min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),
+        quantity_options:qty_opts.length>0?qty_opts:null, stock_quantity:stockQty,min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),points_per_unit: parseInt(form.points_per_unit) || 0,
       }
       const { error }=editing
         ? await supabase.from('products').update(payload).eq('id',form.id)
@@ -151,7 +151,7 @@ export default function AdminPage() {
   }
 
   function startEdit(prod) {
-    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false,min_order_value: prod.min_order_value ?? ''})
+    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false,min_order_value: prod.min_order_value ?? '',points_per_unit: prod.points_per_unit || 0})
     setEditing(true); setImagePreview(prod.image_url||null); setImageFile(null); setTab('products')
     window.scrollTo({top:0,behavior:'smooth'})
   }
@@ -392,7 +392,21 @@ export default function AdminPage() {
     </div>
   )}
 </div>
-
+<div style={{ marginBottom:12 }}>
+  <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+    Loyalty Points per unit
+    <span style={{ fontWeight:400 }}> — optional</span>
+  </div>
+  <input className="inp" type="number" min="0" step="1"
+    value={form.points_per_unit || ''}
+    onChange={e => set('points_per_unit', e.target.value)}
+    placeholder="e.g. 5 (customer earns 5 pts per unit ordered)" />
+  {form.points_per_unit > 0 && (
+    <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>
+      Customer earns {form.points_per_unit} point{form.points_per_unit > 1 ? 's' : ''} per {form.unit || 'unit'} ordered
+    </div>
+  )}
+</div>
               {/* Visibility + In stock toggles */}
               <div style={{marginBottom:10,display:'flex',alignItems:'center',gap:10}}>
                 <input type="checkbox" id="in_stock" checked={form.in_stock}

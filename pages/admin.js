@@ -674,22 +674,44 @@ async function saveSettings() {
                 </div>
               :<>
                   <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                    {pagedCustomers.map(c=>(
-                      <div key={c.id} className="card" style={{padding:'12px 18px',display:'flex',alignItems:'center',gap:14}}>
-                        <div style={{width:38,height:38,borderRadius:'50%',background:'var(--green-pale)',
-                          display:'flex',alignItems:'center',justifyContent:'center',color:'var(--green)',fontWeight:700,fontSize:14,flexShrink:0}}>
-                          {(c.name||c.email||'C').charAt(0).toUpperCase()}
-                        </div>
-                        <div style={{flex:1}}>
-                          <div style={{fontWeight:600,fontSize:14}}>{c.name||'(no name)'}</div>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>{c.email}</div>
-                        </div>
-                        <div style={{textAlign:'right'}}>
-                          <div style={{fontSize:12,color:'var(--green)',fontWeight:600}}>{orders.filter(o=>o.user_email===c.email).length} order(s)</div>
-                          <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>Joined {new Date(c.created_at).toLocaleDateString('en-IN')}</div>
-                        </div>
-                      </div>
-                    ))}
+                  {pagedCustomers.map(c=>(
+  <div key={c.id} className="card" style={{padding:'12px 18px',display:'flex',alignItems:'center',gap:14}}>
+    <div style={{width:38,height:38,borderRadius:'50%',background:'var(--green-pale)',
+      display:'flex',alignItems:'center',justifyContent:'center',color:'var(--green)',fontWeight:700,fontSize:14,flexShrink:0}}>
+      {(c.name||c.email||'C').charAt(0).toUpperCase()}
+    </div>
+    <div style={{flex:1}}>
+      <div style={{fontWeight:600,fontSize:14}}>{c.name||'(no name)'}</div>
+      <div style={{fontSize:12,color:'var(--muted)'}}>{c.email}</div>
+      <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
+        ⭐ {c.points_balance||0} points
+      </div>
+    </div>
+    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
+      <div style={{fontSize:12,color:'var(--green)',fontWeight:600}}>{orders.filter(o=>o.user_email===c.email).length} order(s)</div>
+      <div style={{fontSize:11,color:'var(--muted)'}}>{c.created_at ? `Joined ${new Date(c.created_at).toLocaleDateString('en-IN')}` : ''}</div>
+      {/* Loyalty toggle */}
+      <div style={{display:'flex',alignItems:'center',gap:6}}>
+        <span style={{fontSize:11,color:'var(--muted)'}}>Loyalty</span>
+        <div onClick={async () => {
+          const newVal = !c.loyalty_enabled
+          await fetch('/api/admin/toggle-loyalty', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ user_id: c.id, loyalty_enabled: newVal })
+          })
+          setCustomers(prev => prev.map(x => x.id===c.id ? {...x, loyalty_enabled: newVal} : x))
+        }}
+          style={{width:36,height:20,borderRadius:10,cursor:'pointer',position:'relative',
+            background: c.loyalty_enabled ? 'var(--green)' : 'var(--border)',
+            transition:'background .2s'}}>
+          <div style={{position:'absolute',top:2,left:c.loyalty_enabled?18:2,width:16,height:16,
+            borderRadius:'50%',background:'#fff',transition:'left .2s',
+            boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}} />
+        </div>
+      </div>
+    </div>
+  </div>
+))}
                   </div>
                   <Pagination page={custPage} total={customers.length} perPage={PER_PAGE.customers} onChange={setCustPage} />
                 </>

@@ -227,7 +227,9 @@ export default function OrdersPage() {
                             day:'numeric', month:'short', year:'numeric'
                           })}
                           &nbsp;·&nbsp;{order.items?.length||0} item{order.items?.length!==1?'s':''}
-                          &nbsp;·&nbsp;{order.payment_method==='razorpay'?'💳 Paid':'💵 COD'}
+                          &nbsp;·&nbsp;{order.payment_method==='razorpay'
+  ? order.payment_status==='paid' ? '💳 Paid' : '⏳ Pending'
+  : '💵 COD'}
                         </div>
                         <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>
                           {(order.items||[]).map(i =>

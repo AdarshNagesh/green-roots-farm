@@ -4,14 +4,14 @@ import { supabase } from '../lib/supabase'
 const serif = { fontFamily: 'Playfair Display, serif' }
 
 export default function AuthModal({ onClose, onSuccess }) {
-  const [mode, setMode]       = useState('login')   // login | register | forgot
-  const [form, setForm]       = useState({ name:'', email:'', password:'' })
+  const [mode, setMode]       = useState('login')
+  const [form, setForm]       = useState({ name:'', email:'', password:'', referral:'' })
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })); setError(''); setSuccess('') }
-  function switchMode(m) { setMode(m); setError(''); setSuccess(''); setForm({ name:'', email:'', password:'' }) }
+  function switchMode(m) { setMode(m); setError(''); setSuccess(''); setForm({ name:'', email:'', password:'', referral:'' }) }
 
   async function submit() {
     setError(''); setLoading(true)
@@ -24,17 +24,39 @@ export default function AuthModal({ onClose, onSuccess }) {
       } else if (mode === 'register') {
         if (!form.name || !form.email || !form.password) throw new Error('All fields are required')
         if (form.password.length < 6) throw new Error('Password must be at least 6 characters')
+
+        // If referral code provided, verify it first
+        if (form.referral.trim()) {
+          const { data: refProfile } = await supabase.from('profiles')
+            .select('id').eq('referral_code', form.referral.trim().toUpperCase()).single()
+          if (!refProfile) throw new Error('Invalid referral code — please check and try again')
+        }
+
         const { error } = await supabase.auth.signUp({
           email: form.email, password: form.password,
           options: { data: { name: form.name } },
         })
         if (error) throw error
+
+        // Save referral code to profile if provided
+        if (form.referral.trim()) {
+          // Wait a moment for the profile trigger to create the profile
+          setTimeout(async () => {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session?.user) {
+              await supabase.from('profiles')
+                .update({ referred_by: form.referral.trim().toUpperCase() })
+                .eq('id', session.user.id)
+            }
+          }, 1500)
+        }
+
         onSuccess?.(); onClose()
 
       } else if (mode === 'forgot') {
         if (!form.email) throw new Error('Please enter your email address')
         const { error } = await supabase.auth.resetPasswordForEmail(form.email, {
-          redirectTo: `https://green-roots-farm.vercel.app/reset-password`,
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/reset-password`,
         })
         if (error) throw error
         setSuccess('Password reset link sent! Check your email inbox.')
@@ -82,9 +104,22 @@ export default function AuthModal({ onClose, onSuccess }) {
                 onKeyDown={e => e.key === 'Enter' && submit()} />
             </Field>
           )}
+
+          {/* Referral code — only on register */}
+          {mode === 'register' && (
+            <Field label="Referral Code (optional)">
+              <input className="inp" value={form.referral}
+                onChange={e => set('referral', e.target.value.toUpperCase())}
+                placeholder="Friend's code e.g. ABC123"
+                maxLength={6}
+                style={{ textTransform:'uppercase', letterSpacing:2, fontWeight:600 }} />
+              <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>
+                Have a friend's code? They'll earn 20 points when you place your first order!
+              </div>
+            </Field>
+          )}
         </>}
 
-        {/* Forgot password link */}
         {mode === 'login' && (
           <div style={{ textAlign:'right', marginTop:-6, marginBottom:14 }}>
             <button onClick={() => switchMode('forgot')}
@@ -128,7 +163,6 @@ export default function AuthModal({ onClose, onSuccess }) {
           </button>
         )}
 
-        {/* Footer links */}
         <div style={{ textAlign:'center', fontSize:13, color:'var(--muted)', display:'flex', flexDirection:'column', gap:8 }}>
           {mode === 'login' && (
             <span>Don't have an account? <Lnk onClick={() => switchMode('register')}>Register free</Lnk></span>

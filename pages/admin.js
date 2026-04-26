@@ -12,7 +12,7 @@ const CATEGORIES     = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const UNITS          = ['kg','g','piece','bunch','dozen','litre','pack','box']
 const BUCKET         = 'product-images'
 const ORDER_STATUSES = ['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled']
-const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'', min_order_value:'',points_per_unit:'0' }
+const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'', min_order_value:'',points_per_unit:'0',notifyCustomers: true }
 const LOW_STOCK      = 5
 const PER_PAGE       = { products:10, orders:8, customers:10 }
 
@@ -152,10 +152,12 @@ async function saveSettings() {
         : await supabase.from('products').insert(payload)
       if(error) throw error
       showToast(editing?'✅ Updated — customers notified!':'✅ Added — customers notified!')
+      if (!editing || form.notifyCustomers) {
       await notifyCustomersOfProduct(
         { ...payload, min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),emoji: form.emoji || '🌿', name: form.name },
         !editing
       )
+      }
       resetForm(); loadAll()
     } catch(e) { showToast('Error: '+e.message) }
     finally { setSaving(false); setUploading(false) }
@@ -174,7 +176,7 @@ async function saveSettings() {
   }
 
   function startEdit(prod) {
-    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false,min_order_value: prod.min_order_value ?? '',points_per_unit: prod.points_per_unit || 0})
+    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false,min_order_value: prod.min_order_value ?? '',points_per_unit: prod.points_per_unit || 0,notifyCustomers: true})
     setEditing(true); setImagePreview(prod.image_url||null); setImageFile(null); setTab('products')
     window.scrollTo({top:0,behavior:'smooth'})
   }
@@ -506,7 +508,16 @@ async function saveSettings() {
                   ＋ Add option
                 </button>
               </div>
-
+{editing && (
+  <div style={{ marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+    <input type="checkbox" id="notifyCustomers" checked={form.notifyCustomers !== false}
+      onChange={e => set('notifyCustomers', e.target.checked)}
+      style={{ width:16, height:16, accentColor:'var(--green)', cursor:'pointer' }} />
+    <label htmlFor="notifyCustomers" style={{ fontSize:13, cursor:'pointer' }}>
+      Notify customers about this update
+    </label>
+  </div>
+)}
               <div style={{display:'flex',gap:8}}>
                 <button className="btn-g" style={{flex:1,padding:10}} onClick={saveProduct} disabled={saving||uploading}>
                   {uploading?'Uploading…':saving?'Saving…':editing?'💾 Update':'＋ Add Product'}

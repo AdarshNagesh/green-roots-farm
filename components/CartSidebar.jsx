@@ -38,6 +38,7 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   const [rzpReady, setRzpReady]   = useState(false)
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(false)
 
   // Points state
   const [pointsBalance, setPointsBalance] = useState(0)
@@ -59,15 +60,15 @@ const [pointsRate, setPointsRate] = useState(1)
   }, [])
 
   // Fetch points balance when checkout step opens
- useEffect(() => {
+useEffect(() => {
   if (step === 'checkout' && user) {
     fetch(`/api/credits/balance?user_id=${user.id}`)
       .then(r => r.json())
       .then(d => {
         setPointsBalance(d.points_balance || 0)
         setPointsToRedeem(d.points_balance || 0)
+        setLoyaltyEnabled(d.loyalty_enabled || false)  // ← add this
       })
-    // Fetch points rate
     fetch('/api/settings?key=points_to_rupee_rate')
       .then(r => r.json())
       .then(d => setPointsRate(parseFloat(d.value) || 1))
@@ -302,7 +303,7 @@ const [pointsRate, setPointsRate] = useState(1)
           </div>
 
           {/* ── Points redemption ── */}
-          {pointsBalance > 0 && (
+          {loyaltyEnabled && pointsBalance > 0 && (
             <div style={{ marginBottom:18, padding:'14px 16px',
               background: usePoints ? 'var(--green-pale)' : 'var(--bg)',
               borderRadius:12, border:`1.5px solid ${usePoints ? 'var(--green)' : 'var(--border)'}`,

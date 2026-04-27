@@ -867,15 +867,36 @@ async function saveSettings() {
   )
 }
 // ============================================================
-// FarmsTab component — add at the BOTTOM of pages/admin.js
-// before the final closing brace
+// UPDATED FarmsTab — replace existing FarmsTab in admin.js
 // ============================================================
 
 function FarmsTab({ farms, onReload, showToast }) {
   const BLANK_FARM = { id:'', name:'', owner_name:'', email:'', phone:'', platform_fee:'0' }
-  const [form, setForm]     = useState(BLANK_FARM)
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]         = useState(BLANK_FARM)
+  const [editing, setEditing]   = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [pending, setPending]   = useState([])
+  const [approving, setApproving] = useState(null)
+
+  useEffect(() => { loadPending() }, [])
+
+  async function loadPending() {
+    const res = await fetch('/api/admin/farms?pending=true')
+    if (res.ok) setPending(await res.json())
+  }
+
+  async function handleApproval(farmId, action) {
+    setApproving(farmId)
+    const res = await fetch('/api/farms/approve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ farm_id: farmId, action }),
+    })
+    if (res.ok) {
+      showToast(action === 'approve' ? '✅ Farm approved! Owner notified.' : '❌ Registration rejected.')
+      loadPending(); onReload()
+    } else showToast('Failed — try again')
+    setApproving(null)
+  }
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
@@ -900,31 +921,84 @@ function FarmsTab({ farms, onReload, showToast }) {
 
   async function toggleActive(farm) {
     await fetch('/api/admin/farms', {
-      method:  'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ ...farm, is_active: !farm.is_active }),
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...farm, is_active: !farm.is_active }),
     })
     showToast(farm.is_active ? 'Farm disabled' : 'Farm enabled')
     onReload()
   }
 
+  const approvedFarms = farms.filter(f => f.is_approved)
   const serif = { fontFamily: 'Playfair Display, serif' }
 
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 380px', gap:24, alignItems:'start' }}>
-      {/* Farm list */}
       <div>
-        <div style={{ fontWeight:600, fontSize:15, marginBottom:12 }}>Registered Farms ({farms.length})</div>
-        {farms.length === 0 ? (
+
+        {/* ── Pending Approvals ── */}
+        {pending.length > 0 && (
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontWeight:600, fontSize:15, marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+              ⏳ Pending Approval
+              <span style={{ background:'var(--gold)', color:'#fff', fontSize:11,
+                padding:'2px 8px', borderRadius:10 }}>{pending.length}</span>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {pending.map(f => (
+                <div key={f.id} className="card" style={{ padding:18, border:'1.5px solid var(--gold)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>{f.name}</div>
+                      <div style={{ fontSize:13, color:'var(--muted)', lineHeight:1.8 }}>
+                        👤 {f.owner_name}<br/>
+                        ✉️ {f.email}
+                        {f.phone && <><br/>📞 {f.phone}</>}
+                        {f.upi_id && <><br/>💳 UPI: {f.upi_id}</>}
+                        {f.city && <><br/>📍 {f.city}</>}
+                      </div>
+                      {f.description && (
+                        <div style={{ fontSize:12, color:'var(--muted)', marginTop:8, lineHeight:1.6,
+                          padding:'8px 12px', background:'var(--bg)', borderRadius:8 }}>
+                          "{f.description}"
+                        </div>
+                      )}
+                      <div style={{ fontSize:11, color:'var(--muted)', marginTop:8 }}>
+                        Applied {new Date(f.created_at).toLocaleDateString('en-IN')}
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:8, flexShrink:0, marginLeft:16 }}>
+                      <button className="btn-g" style={{ padding:'8px 18px', fontSize:13 }}
+                        disabled={approving === f.id}
+                        onClick={() => handleApproval(f.id, 'approve')}>
+                        {approving === f.id ? '…' : '✓ Approve'}
+                      </button>
+                      <button style={{ padding:'8px 18px', fontSize:13, border:'1.5px solid var(--red)',
+                        borderRadius:9, background:'var(--red-pale)', color:'var(--red)', cursor:'pointer' }}
+                        disabled={approving === f.id}
+                        onClick={() => handleApproval(f.id, 'reject')}>
+                        ✗ Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Approved Farms ── */}
+        <div style={{ fontWeight:600, fontSize:15, marginBottom:12 }}>
+          Active Farms ({approvedFarms.length})
+        </div>
+        {approvedFarms.length === 0 ? (
           <div className="card" style={{ padding:48, textAlign:'center', color:'var(--muted)' }}>
             <div style={{ fontSize:36, marginBottom:10 }}>🚜</div>
             <div style={{ fontWeight:600 }}>No farms yet — add one →</div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {farms.map(f => (
-              <div key={f.id} className="card" style={{ padding:'14px 18px',
-                opacity: f.is_active ? 1 : 0.55 }}>
+            {approvedFarms.map(f => (
+              <div key={f.id} className="card" style={{ padding:'14px 18px', opacity: f.is_active ? 1 : 0.55 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
@@ -933,13 +1007,16 @@ function FarmsTab({ farms, onReload, showToast }) {
                         <span style={{ fontSize:10, background:'var(--red-pale)', color:'var(--red)',
                           padding:'2px 8px', borderRadius:8, fontWeight:600 }}>Disabled</span>
                       )}
+                      {f.owner_id && (
+                        <span style={{ fontSize:10, background:'var(--green-pale)', color:'var(--green)',
+                          padding:'2px 8px', borderRadius:8, fontWeight:600 }}>Self-registered</span>
+                      )}
                     </div>
                     <div style={{ fontSize:13, color:'var(--muted)', lineHeight:1.8 }}>
-                      👤 {f.owner_name}<br/>
-                      ✉️ {f.email}
-                      {f.phone && <><br/>📞 {f.phone}</>}
+                      👤 {f.owner_name} · ✉️ {f.email}
+                      {f.phone && ` · 📞 ${f.phone}`}
                     </div>
-                    <div style={{ marginTop:8, display:'flex', gap:10, flexWrap:'wrap' }}>
+                    <div style={{ marginTop:6, display:'flex', gap:8 }}>
                       <span style={{ fontSize:12, background:'var(--green-pale)', color:'var(--green)',
                         padding:'3px 10px', borderRadius:8, fontWeight:600 }}>
                         Platform fee: {f.platform_fee}%
@@ -964,17 +1041,21 @@ function FarmsTab({ farms, onReload, showToast }) {
         )}
       </div>
 
-      {/* Add/Edit form */}
+      {/* Add/Edit Form */}
       <div className="card" style={{ padding:22, position:'sticky', top:80 }}>
         <div style={{ fontWeight:700, fontSize:16, color:'var(--green)', marginBottom:18 }}>
-          {editing ? '✏️ Edit Farm' : '＋ Add New Farm'}
+          {editing ? '✏️ Edit Farm' : '＋ Add Farm Manually'}
+        </div>
+        <div style={{ fontSize:12, color:'var(--muted)', marginBottom:16, lineHeight:1.6 }}>
+          Use this to add farms directly. Farm owners can also self-register via{' '}
+          <a href="/register-farm" target="_blank" style={{ color:'var(--green)', fontWeight:600 }}>/register-farm</a>
         </div>
 
         {[
-          { label:'Farm Name *',   key:'name',       placeholder:'e.g. Green Valley Farm' },
-          { label:'Owner Name *',  key:'owner_name', placeholder:'Full name of owner' },
-          { label:'Email *',       key:'email',      placeholder:'farm@example.com' },
-          { label:'Phone',         key:'phone',      placeholder:'+91 98765 43210' },
+          { label:'Farm Name *',  key:'name',       placeholder:'e.g. Green Valley Farm' },
+          { label:'Owner Name *', key:'owner_name', placeholder:'Full name of owner' },
+          { label:'Email *',      key:'email',      placeholder:'farm@example.com' },
+          { label:'Phone',        key:'phone',      placeholder:'+91 98765 43210' },
         ].map(f => (
           <div key={f.key} style={{ marginBottom:12 }}>
             <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>{f.label}</div>
@@ -983,30 +1064,28 @@ function FarmsTab({ farms, onReload, showToast }) {
         ))}
 
         <div style={{ marginBottom:18 }}>
-          <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
-            Platform Fee (%)
-          </div>
+          <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Platform Fee (%)</div>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <input className="inp" type="number" min="0" max="100" step="0.5"
               value={form.platform_fee} onChange={e => set('platform_fee', e.target.value)}
-              placeholder="e.g. 10" style={{ flex:1 }} />
-            <span style={{ fontSize:13, color:'var(--muted)', whiteSpace:'nowrap' }}>% of order total</span>
+              placeholder="0" style={{ flex:1 }} />
+            <span style={{ fontSize:13, color:'var(--muted)', whiteSpace:'nowrap' }}>% of order</span>
           </div>
           {parseFloat(form.platform_fee) > 0 && (
-            <div style={{ fontSize:11, color:'var(--muted)', marginTop:6, lineHeight:1.6 }}>
-              Example: ₹1000 order → fee ₹{(1000 * parseFloat(form.platform_fee) / 100).toFixed(0)} → farm gets ₹{(1000 - 1000 * parseFloat(form.platform_fee) / 100).toFixed(0)}
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>
+              ₹1000 order → fee ₹{(1000*parseFloat(form.platform_fee)/100).toFixed(0)} → farm gets ₹{(1000-1000*parseFloat(form.platform_fee)/100).toFixed(0)}
             </div>
           )}
         </div>
 
         <div style={{ padding:'10px 12px', background:'var(--green-pale)', borderRadius:9,
-          fontSize:12, color:'var(--muted)', lineHeight:1.5, marginBottom:14 }}>
-          💡 Platform fee is deducted in the export report. Use 0 for Adarshini (your own farm).
+          fontSize:12, color:'var(--muted)', marginBottom:14 }}>
+          💡 Use 0% for Adarshini (your own farm).
         </div>
 
         <div style={{ display:'flex', gap:8 }}>
           <button className="btn-g" style={{ flex:1, padding:10 }} onClick={saveFarm} disabled={saving}>
-            {saving ? 'Saving…' : editing ? '💾 Update Farm' : '＋ Add Farm'}
+            {saving ? 'Saving…' : editing ? '💾 Update' : '＋ Add Farm'}
           </button>
           {editing && (
             <button className="btn-o" style={{ padding:'10px 14px' }}
@@ -1017,4 +1096,5 @@ function FarmsTab({ farms, onReload, showToast }) {
     </div>
   )
 }
+
 

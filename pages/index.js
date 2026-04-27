@@ -332,7 +332,7 @@ const [farmFilter, setFarmFilter] = useState('All')
     supabase.auth.getSession().then(({ data:{ session } }) => setUser(session?.user??null))
     const { data:{ subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user??null))
     fetchProducts()
-    fetch('/api/admin/farms').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
+    fetch('/api/admin/farms?active=true').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
     return () => subscription.unsubscribe()
   }, [])
 
@@ -423,7 +423,9 @@ const [farmFilter, setFarmFilter] = useState('All')
   function toast_show(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   const cartCount = cart.reduce((s,i) => s+i.qty, 0)
-  const filtered = products.filter(p=>
+ const activeFarmIds = new Set(farms.map(f => f.id))
+const filtered = products.filter(p=>
+  (p.farm_id === null || activeFarmIds.has(p.farm_id)) &&
   (filter==='All'||p.category===filter) &&
   (farmFilter==='All'||p.farm_id===farmFilter) &&
   p.name.toLowerCase().includes(search.toLowerCase())

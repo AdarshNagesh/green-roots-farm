@@ -349,18 +349,25 @@ const [farmFilter, setFarmFilter] = useState('All')
     return () => supabase.removeChannel(ch)
   }, [user])
 
-  useEffect(() => {
-    const prodChannel = supabase.channel('products_live')
-      .on('postgres_changes', { event:'*', schema:'public', table:'products' }, fetchProducts)
-      .subscribe()
-    const orderChannel = supabase.channel('orders_stock_watch')
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders' }, fetchProducts)
-      .subscribe()
-    return () => {
-      supabase.removeChannel(prodChannel)
-      supabase.removeChannel(orderChannel)
-    }
-  }, [])
+ useEffect(() => {
+  const prodChannel = supabase.channel('products_live')
+    .on('postgres_changes', { event:'*', schema:'public', table:'products' }, fetchProducts)
+    .subscribe()
+  const orderChannel = supabase.channel('orders_stock_watch')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders' }, fetchProducts)
+    .subscribe()
+  const farmChannel = supabase.channel('farms_live')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'farms' }, () => {
+      fetch('/api/admin/farms?active=true')
+        .then(r => r.json()).then(d => setFarms(d||[])).catch(()=>{})
+    })
+    .subscribe()
+  return () => {
+    supabase.removeChannel(prodChannel)
+    supabase.removeChannel(orderChannel)
+    supabase.removeChannel(farmChannel)
+  }
+}, [])
 
   async function fetchProducts() {
     setLoading(true)

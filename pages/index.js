@@ -356,8 +356,8 @@ const [farmFilter, setFarmFilter] = useState('All')
   const orderChannel = supabase.channel('orders_stock_watch')
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders' }, fetchProducts)
     .subscribe()
-  const farmChannel = supabase.channel('farms_live')
-    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'farms' }, () => {
+const farmChannel = supabase.channel('farms_live')
+  .on('postgres_changes', { event:'*', schema:'public', table:'farms' }, () => {
       fetch('/api/admin/farms?active=true')
         .then(r => r.json()).then(d => setFarms(d||[])).catch(()=>{})
     })

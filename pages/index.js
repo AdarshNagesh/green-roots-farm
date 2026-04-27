@@ -5,6 +5,7 @@ import Header                  from '../components/Header'
 import AuthModal               from '../components/AuthModal'
 import CartSidebar             from '../components/CartSidebar'
 import { Footer, FloatingWhatsApp } from '../components/Footer'
+import { useRouter } from 'next/router'
 
 const serif      = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
@@ -327,7 +328,7 @@ export default function ShopPage() {
   const [loading, setLoading]           = useState(true)
   const [farms, setFarms]       = useState([])
 const [farmFilter, setFarmFilter] = useState('All')
-
+const router = useRouter()
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => setUser(session?.user??null))
     const { data:{ subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user??null))
@@ -447,7 +448,7 @@ const filtered = products.filter(p=>
       </Head>
 
       <Header user={user} cartCount={cartCount} onCartOpen={() => setShowCart(true)}
-        onAuthOpen={() => setShowAuth(true)} notifs={notifs} setNotifs={setNotifs} />
+        onAuthOpen={() => setShowAuth(true)} notifs={notifs} setNotifs={setNotifs}/>
 
       <main style={{ maxWidth:1120, margin:'0 auto', padding:'28px 20px' }}>
 
@@ -473,6 +474,14 @@ const filtered = products.filter(p=>
                 Register for Updates 🔔
               </button>
             )}
+<div style={{ marginTop:10 }}>
+  <button onClick={() => router.push('/register-farm')}
+    style={{ background:'transparent', border:'1.5px solid rgba(255,255,255,0.4)', 
+      color:'#fff', padding:'8px 18px', borderRadius:20, cursor:'pointer', 
+      fontSize:12, fontFamily:'DM Sans, sans-serif' }}>
+    🚜 Are you a farm owner? Register here
+  </button>
+</div>
           </div>
           <div style={{ fontSize:88, flexShrink:0 }}>🧺</div>
         </div>

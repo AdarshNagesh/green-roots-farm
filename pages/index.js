@@ -10,6 +10,7 @@ const serif      = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const LOW_STOCK  = 5
 
+
 // ── Notify Me Button ──────────────────────────────────────────────────────────
 function NotifyMeButton({ productId, userId, userEmail }) {
   const [onList, setOnList]   = useState(false)
@@ -324,11 +325,14 @@ export default function ShopPage() {
   const [modalProduct, setModalProduct] = useState(null)
   const [toast, setToast]               = useState('')
   const [loading, setLoading]           = useState(true)
+  const [farms, setFarms]       = useState([])
+const [farmFilter, setFarmFilter] = useState('All')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => setUser(session?.user??null))
     const { data:{ subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user??null))
     fetchProducts()
+    fetch('/api/admin/farms').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
     return () => subscription.unsubscribe()
   }, [])
 
@@ -419,10 +423,11 @@ export default function ShopPage() {
   function toast_show(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   const cartCount = cart.reduce((s,i) => s+i.qty, 0)
-  const filtered  = products.filter(p =>
-    (filter==='All' || p.category===filter) &&
-    p.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = products.filter(p=>
+  (filter==='All'||p.category===filter) &&
+  (farmFilter==='All'||p.farm_id===farmFilter) &&
+  p.name.toLowerCase().includes(search.toLowerCase())
+)
 
   return (
     <>
@@ -462,7 +467,21 @@ export default function ShopPage() {
           </div>
           <div style={{ fontSize:88, flexShrink:0 }}>🧺</div>
         </div>
-
+{farms.length > 1 && (
+  <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+    <span style={{fontSize:12,color:'var(--muted)',fontWeight:600,marginRight:4}}>Farm:</span>
+    {['All',...farms.map(f=>({id:f.id,name:f.name}))].map(f=>(
+      <button key={typeof f==='string'?f:f.id}
+        onClick={()=>setFarmFilter(typeof f==='string'?'All':f.id)}
+        style={{padding:'5px 14px',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:500,
+          border:`1.5px solid ${farmFilter===(typeof f==='string'?'All':f.id)?'var(--green)':'var(--border)'}`,
+          background:farmFilter===(typeof f==='string'?'All':f.id)?'var(--green)':'transparent',
+          color:farmFilter===(typeof f==='string'?'All':f.id)?'#fff':'var(--text)',transition:'all .2s'}}>
+        {typeof f==='string'?'🌿 All Farms':f.name}
+      </button>
+    ))}
+  </div>
+)}
         {/* Search + filters */}
         <div style={{ display:'flex', gap:12, marginBottom:24, flexWrap:'wrap', alignItems:'center' }}>
           <div style={{ position:'relative', flex:'1 1 200px' }}>

@@ -121,20 +121,23 @@ useEffect(() => {
       selected_option: i.selected_option || null, multiplier: i.multiplier || 1,
       unit: i.unit, qty: i.qty,
     }))
-    const { data, error: err } = await supabase.from('orders').insert({
-      user_id:        user.id,
-      user_email:     user.email,
-      customer_name:  form.name,
-      address:        form.address,
-      phone:          form.phone,
-      notes:          form.notes || null,
-      items,
-      total,
-      points_redeemed: usePoints ? pointsToRedeem : 0,
-      status:          paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
-      payment_status:  paymentStatus,
-      payment_method:  paymentMethod,
-    }).select().single()
+   const farmId = cart.find(i => i.farm_id)?.farm_id || null
+
+const { data, error: err } = await supabase.from('orders').insert({
+  user_id:        user.id,
+  user_email:     user.email,
+  customer_name:  form.name,
+  address:        form.address,
+  phone:          form.phone,
+  notes:          form.notes || null,
+  items,
+  total,
+  farm_id:        farmId,   // ← add this line
+  points_redeemed: usePoints ? pointsToRedeem : 0,
+  status:          paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
+  payment_status:  paymentStatus,
+  payment_method:  paymentMethod,
+}).select().single()
     if (err) throw err
     return data
   }

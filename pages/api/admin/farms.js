@@ -8,7 +8,10 @@ const admin = createClient(
 export default async function handler(req, res) {
   // GET — list all farms
   if (req.method === 'GET') {
-    const { data, error } = await admin.from('farms').select('*').order('created_at', { ascending: true })
+   const { active } = req.query
+let query = admin.from('farms').select('*').order('created_at', { ascending: true })
+if (active === 'true') query = query.eq('is_active', true)
+const { data, error } = await query
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json(data || [])
   }

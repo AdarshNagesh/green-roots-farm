@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   // ── Product notification (broadcast to all customers) ─────────────────────
   if (type === 'product_new' || type === 'product_update') {
     if (!product || !product.emails || product.emails.length === 0)
-      return res.status(200).json({ success: true, sent: 0 })
+     return res.status(200).json({ success: true, sent: 0 })
 
     const isNew     = type === 'product_new'
     const subject   = isNew
@@ -161,10 +161,25 @@ export default async function handler(req, res) {
 </body>
 </html>`
 
-  try {
+try {
+    let ccEmails = []
+    if (order.farm_id) {
+      const { createClient } = await import('@supabase/supabase-js')
+      const adminClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      )
+      const { data: farm } = await adminClient.from('farms')
+        .select('email, name').eq('id', order.farm_id).single()
+      if (farm?.email && farm.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+        ccEmails.push(farm.email)
+      }
+    }
+
     const { error } = await resend.emails.send({
       from:    process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
       to:      order.user_email,
+      cc:      ccEmails.length > 0 ? ccEmails : undefined,
       subject: subjects[type] || subjects.confirmed,
       html,
     })
@@ -174,4 +189,5 @@ export default async function handler(req, res) {
     console.error('Resend error:', err)
     res.status(200).json({ success: false, warning: err.message })
   }
+
 }

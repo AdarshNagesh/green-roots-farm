@@ -333,7 +333,7 @@ const router = useRouter()
   supabase.auth.getSession().then(async ({ data:{ session } }) => {
     const u = session?.user ?? null
     setUser(u)
-    if (u) {
+    if (u && router.query.portal !== '1') {
       const { data: profile } = await supabase.from('profiles')
         .select('role').eq('id', u.id).single()
       if (profile?.role === 'farm_owner') {
@@ -345,7 +345,7 @@ const router = useRouter()
   const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
     const u = session?.user ?? null
     setUser(u)
-    if (u) {
+   if (u && router.query.portal !== '1') {
       const { data: profile } = await supabase.from('profiles')
         .select('role').eq('id', u.id).single()
       if (profile?.role === 'farm_owner') {

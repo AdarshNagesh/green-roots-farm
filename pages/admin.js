@@ -278,9 +278,9 @@ async function saveSettings() {
 
         {/* Tabs */}
         <div style={{display:'flex',borderBottom:'2px solid var(--border)',marginBottom:24}}>
-         {['products','orders','customers','farms','settings'].map(t=>(
+      {['products','orders','customers','farms','settlements','settings'].map(t=>(
   <button key={t} className={`tab-btn ${tab===t?'active':''}`} onClick={()=>setTab(t)}>
-    {t==='products'?'🌿 Products':t==='orders'?'📦 Orders':t==='customers'?'👥 Customers':t==='farms'?'🚜 Farms':'⚙️ Settings'}
+    {t==='products'?'🌿 Products':t==='orders'?'📦 Orders':t==='customers'?'👥 Customers':t==='farms'?'🚜 Farms':t==='settlements'?'💰 Settlements':'⚙️ Settings'}
   </button>
 ))}
         </div>
@@ -744,6 +744,7 @@ async function saveSettings() {
         )}
 {/* ── FARMS TAB ── */}
 {tab==='farms' && <FarmsTab farms={farms} onReload={loadFarms} showToast={showToast} />}
+{tab==='settlements' && <SettlementTab orders={orders} farms={farms} adminEmail={user?.email} showToast={showToast} />}
 {/* ── SETTINGS TAB ── */}
 {tab==='settings' && (
   <div style={{maxWidth:520}}>
@@ -1091,6 +1092,250 @@ function FarmsTab({ farms, onReload, showToast }) {
             <button className="btn-o" style={{ padding:'10px 14px' }}
               onClick={() => { setForm(BLANK_FARM); setEditing(false) }}>Cancel</button>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+// ============================================================
+// SettlementTab — add at the BOTTOM of pages/admin.js
+// Also add 'settlements' to the tabs array
+// ============================================================
+
+function SettlementTab({ orders, farms, adminEmail, showToast }) {
+  const [settlements, setSettlements]   = useState([])
+  const [selectedFarm, setSelectedFarm] = useState(farms[0]?.id || '')
+  const [form, setForm] = useState({
+    amount: '', reference: '', notes: '', period_from: '', period_to: ''
+  })
+  const [saving, setSaving]   = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => { loadSettlements() }, [])
+
+  async function loadSettlements() {
+    setLoading(true)
+    const res = await fetch('/api/admin/settlements')
+    if (res.ok) setSettlements(await res.json())
+    setLoading(false)
+  }
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  // Calculate per-farm financials
+  function getFarmFinancials(farmId) {
+    const farm        = farms.find(f => f.id === farmId)
+    const feePct      = parseFloat(farm?.platform_fee || 0)
+    const farmOrders  = orders.filter(o =>
+      o.farm_id === farmId && o.status !== 'Cancelled'
+    )
+    const grossRevenue = farmOrders.reduce((s, o) => s + Number(o.total), 0)
+    const platformFee  = parseFloat((grossRevenue * feePct / 100).toFixed(2))
+    const netPayable   = parseFloat((grossRevenue - platformFee).toFixed(2))
+    const totalSettled = settlements
+      .filter(s => s.farm_id === farmId)
+      .reduce((s, x) => s + Number(x.amount), 0)
+    const pendingBalance = parseFloat((netPayable - totalSettled).toFixed(2))
+    return { grossRevenue, platformFee, feePct, netPayable, totalSettled, pendingBalance, orderCount: farmOrders.length }
+  }
+
+  async function recordSettlement() {
+    if (!selectedFarm || !form.amount) { showToast('Select farm and enter amount'); return }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/settlements', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, farm_id: selectedFarm, settled_by: adminEmail }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      showToast('✅ Settlement recorded!')
+      setForm({ amount: '', reference: '', notes: '', period_from: '', period_to: '' })
+      loadSettlements()
+    } catch (e) { showToast('Error: ' + e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function deleteSettlement(id) {
+    if (!confirm('Remove this settlement record?')) return
+    await fetch('/api/admin/settlements', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    showToast('Removed'); loadSettlements()
+  }
+
+  const serif = { fontFamily: 'Playfair Display, serif' }
+  const activeFarms = farms.filter(f => f.is_approved)
+
+  return (
+    <div>
+      {/* Per-farm summary cards */}
+      <div style={{ fontWeight:600, fontSize:15, marginBottom:16 }}>💰 Settlement Overview</div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:14, marginBottom:28 }}>
+        {activeFarms.map(farm => {
+          const fin = getFarmFinancials(farm.id)
+          return (
+            <div key={farm.id} className="card" style={{ padding:18,
+              border: fin.pendingBalance > 0 ? '1.5px solid var(--gold)' : '1.5px solid var(--border)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:15 }}>{farm.name}</div>
+                  <div style={{ fontSize:12, color:'var(--muted)' }}>{farm.owner_name} · {fin.orderCount} orders</div>
+                </div>
+                {fin.pendingBalance > 0 && (
+                  <span style={{ fontSize:11, background:'var(--gold-pale)', color:'var(--gold)',
+                    padding:'3px 10px', borderRadius:8, fontWeight:600 }}>Pending</span>
+                )}
+                {fin.pendingBalance <= 0 && fin.grossRevenue > 0 && (
+                  <span style={{ fontSize:11, background:'var(--green-pale)', color:'var(--green)',
+                    padding:'3px 10px', borderRadius:8, fontWeight:600 }}>Settled ✓</span>
+                )}
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                {[
+                  { label:'Gross Revenue', value:`₹${fin.grossRevenue.toLocaleString('en-IN')}`, color:'var(--text)' },
+                  { label:`Platform Fee (${fin.feePct}%)`, value:`₹${fin.platformFee.toLocaleString('en-IN')}`, color:'var(--green)' },
+                  { label:'Net Payable', value:`₹${fin.netPayable.toLocaleString('en-IN')}`, color:'var(--text)', bold:true },
+                  { label:'Already Settled', value:`₹${fin.totalSettled.toLocaleString('en-IN')}`, color:'var(--muted)' },
+                ].map(s => (
+                  <div key={s.label} style={{ padding:'8px 10px', background:'var(--bg)', borderRadius:8 }}>
+                    <div style={{ fontSize:10, color:'var(--muted)', marginBottom:2 }}>{s.label}</div>
+                    <div style={{ fontSize:14, fontWeight: s.bold ? 700 : 600, color:s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+                padding:'10px 12px', background: fin.pendingBalance > 0 ? 'var(--gold-pale)' : 'var(--green-pale)',
+                borderRadius:8 }}>
+                <span style={{ fontSize:13, fontWeight:600,
+                  color: fin.pendingBalance > 0 ? 'var(--gold)' : 'var(--green)' }}>
+                  {fin.pendingBalance > 0 ? '⏳ Pending Balance' : '✅ Balance'}
+                </span>
+                <span style={{ ...serif, fontSize:18, fontWeight:700,
+                  color: fin.pendingBalance > 0 ? 'var(--gold)' : 'var(--green)' }}>
+                  ₹{fin.pendingBalance.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 380px', gap:24, alignItems:'start' }}>
+        {/* Settlement history */}
+        <div>
+          <div style={{ fontWeight:600, fontSize:15, marginBottom:12 }}>Settlement History</div>
+          {loading ? (
+            <div style={{ textAlign:'center', padding:40, color:'var(--muted)' }}>Loading…</div>
+          ) : settlements.length === 0 ? (
+            <div className="card" style={{ padding:40, textAlign:'center', color:'var(--muted)' }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
+              <div style={{ fontWeight:600 }}>No settlements recorded yet</div>
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {settlements.map(s => {
+                const farm = farms.find(f => f.id === s.farm_id)
+                return (
+                  <div key={s.id} className="card" style={{ padding:'12px 16px',
+                    display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
+                        <span style={{ fontWeight:600, fontSize:14 }}>{farm?.name || 'Unknown Farm'}</span>
+                        <span style={{ fontSize:11, background:'var(--green-pale)', color:'var(--green)',
+                          padding:'2px 8px', borderRadius:8, fontWeight:600 }}>
+                          ₹{Number(s.amount).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div style={{ fontSize:12, color:'var(--muted)' }}>
+                        {new Date(s.created_at).toLocaleDateString('en-IN')}
+                        {s.period_from && s.period_to && ` · ${new Date(s.period_from).toLocaleDateString('en-IN')} – ${new Date(s.period_to).toLocaleDateString('en-IN')}`}
+                        {s.reference && <> · Ref: <strong>{s.reference}</strong></>}
+                      </div>
+                      {s.notes && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{s.notes}</div>}
+                    </div>
+                    <button onClick={() => deleteSettlement(s.id)}
+                      style={{ fontSize:11, padding:'4px 10px', border:'1px solid var(--border)',
+                        borderRadius:7, background:'transparent', cursor:'pointer', color:'var(--red)' }}>
+                      Remove
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Record new settlement */}
+        <div className="card" style={{ padding:22, position:'sticky', top:80 }}>
+          <div style={{ fontWeight:700, fontSize:16, color:'var(--green)', marginBottom:18 }}>
+            💸 Record Settlement
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Farm *</div>
+            <select className="inp" value={selectedFarm} onChange={e => setSelectedFarm(e.target.value)}>
+              <option value="">— Select farm —</option>
+              {activeFarms.map(f => {
+                const fin = getFarmFinancials(f.id)
+                return (
+                  <option key={f.id} value={f.id}>
+                    {f.name} {fin.pendingBalance > 0 ? `(₹${fin.pendingBalance.toLocaleString('en-IN')} pending)` : ''}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
+          {selectedFarm && (() => {
+            const fin = getFarmFinancials(selectedFarm)
+            return fin.pendingBalance > 0 ? (
+              <div style={{ marginBottom:12, padding:'10px 12px', background:'var(--gold-pale)',
+                borderRadius:9, fontSize:12, color:'var(--gold)', fontWeight:500 }}>
+                ⏳ Pending: ₹{fin.pendingBalance.toLocaleString('en-IN')} to be paid
+              </div>
+            ) : null
+          })()}
+
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Amount Paid (₹) *</div>
+            <input className="inp" type="number" min="0" step="1"
+              value={form.amount} onChange={e => set('amount', e.target.value)}
+              placeholder="e.g. 9000" />
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+              UTR / Transaction Reference
+            </div>
+            <input className="inp" value={form.reference} onChange={e => set('reference', e.target.value)}
+              placeholder="e.g. 407612345678" />
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Period From</div>
+              <input className="inp" type="date" value={form.period_from} onChange={e => set('period_from', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Period To</div>
+              <input className="inp" type="date" value={form.period_to} onChange={e => set('period_to', e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ marginBottom:18 }}>
+            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Notes (optional)</div>
+            <input className="inp" value={form.notes} onChange={e => set('notes', e.target.value)}
+              placeholder="e.g. April 2026 settlement via GPay" />
+          </div>
+
+          <button className="btn-g" style={{ width:'100%', padding:11 }}
+            onClick={recordSettlement} disabled={saving}>
+            {saving ? 'Saving…' : '✓ Record Settlement'}
+          </button>
         </div>
       </div>
     </div>

@@ -329,13 +329,35 @@ export default function ShopPage() {
   const [farms, setFarms]       = useState([])
 const [farmFilter, setFarmFilter] = useState('All')
 const router = useRouter()
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data:{ session } }) => setUser(session?.user??null))
-    const { data:{ subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user??null))
-    fetchProducts()
-    fetch('/api/admin/farms?active=true').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
-    return () => subscription.unsubscribe()
-  }, [])
+ useEffect(() => {
+  supabase.auth.getSession().then(async ({ data:{ session } }) => {
+    const u = session?.user ?? null
+    setUser(u)
+    if (u) {
+      const { data: profile } = await supabase.from('profiles')
+        .select('role').eq('id', u.id).single()
+      if (profile?.role === 'farm_owner') {
+        router.replace('/farm-portal'); return
+      }
+    }
+  })
+
+  const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
+    const u = session?.user ?? null
+    setUser(u)
+    if (u) {
+      const { data: profile } = await supabase.from('profiles')
+        .select('role').eq('id', u.id).single()
+      if (profile?.role === 'farm_owner') {
+        router.replace('/farm-portal'); return
+      }
+    }
+  })
+
+  fetchProducts()
+  fetch('/api/admin/farms?active=true').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
+  return () => subscription.unsubscribe()
+}, [])
 
   useEffect(() => {
     if (!user || isAdmin(user)) return

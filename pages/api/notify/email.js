@@ -171,7 +171,7 @@ try {
       )
       const { data: farm } = await adminClient.from('farms')
         .select('email, name').eq('id', order.farm_id).single()
-      if (farm?.email && farm.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+      if (farm?.email && farm.email !== process.env.ADMIN_EMAIL) {
         ccEmails.push(farm.email)
       }
     }

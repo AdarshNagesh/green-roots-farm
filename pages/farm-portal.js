@@ -225,7 +225,7 @@ export default function FarmPortal() {
         </div>
         <div style={{ display:'flex', gap:12, alignItems:'center' }}>
           <span style={{ fontSize:13, color:'var(--muted)' }}>{user?.email}</span>
-          <button onClick={() => router.push('/')}
+          <button onClick={() => router.push('/?portal=1')}
             style={{ fontSize:12, padding:'6px 14px', border:'1px solid var(--border)',
               borderRadius:8, background:'transparent', cursor:'pointer' }}>🛒 View Shop</button>
           <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}

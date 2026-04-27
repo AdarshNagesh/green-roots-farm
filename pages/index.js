@@ -329,17 +329,19 @@ export default function ShopPage() {
   const [farms, setFarms]       = useState([])
 const [farmFilter, setFarmFilter] = useState('All')
 const router = useRouter()
+  const [isFarmOwner, setIsFarmOwner] = useState(false)
  useEffect(() => {
   supabase.auth.getSession().then(async ({ data:{ session } }) => {
     const u = session?.user ?? null
     setUser(u)
-    if (u && router.query.portal !== '1') {
-      const { data: profile } = await supabase.from('profiles')
-        .select('role').eq('id', u.id).single()
-      if (profile?.role === 'farm_owner') {
-        router.replace('/farm-portal'); return
-      }
-    }
+   if (u) {
+  const { data: profile } = await supabase.from('profiles')
+    .select('role').eq('id', u.id).single()
+  if (profile?.role === 'farm_owner') {
+    if (router.query.portal === '1') setIsFarmOwner(true)
+    else { router.replace('/farm-portal'); return }
+  }
+}
   })
 
   const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
@@ -471,7 +473,20 @@ const filtered = products.filter(p=>
 
       <Header user={user} cartCount={cartCount} onCartOpen={() => setShowCart(true)}
         onAuthOpen={() => setShowAuth(true)} notifs={notifs} setNotifs={setNotifs}/>
-
+{/* Farm owner portal link */}
+{isFarmOwner && (
+  <div style={{ background:'var(--green-pale)', borderBottom:'1px solid var(--border)',
+    padding:'8px 24px', display:'flex', justifyContent:'center', alignItems:'center', gap:10 }}>
+    <span style={{ fontSize:13, color:'var(--green)', fontWeight:500 }}>
+      🚜 You are viewing as a customer
+    </span>
+    <button onClick={() => router.push('/farm-portal')}
+      style={{ fontSize:12, padding:'5px 14px', border:'1.5px solid var(--green)',
+        borderRadius:20, background:'var(--green)', color:'#fff', cursor:'pointer', fontWeight:600 }}>
+      Go to Farm Portal →
+    </button>
+  </div>
+)}
       <main style={{ maxWidth:1120, margin:'0 auto', padding:'28px 20px' }}>
 
         {/* Hero */}

@@ -37,12 +37,24 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    const { id } = req.body
-    const { data: existing } = await admin.from('products').select('farm_id').eq('id', id).single()
-    if (existing?.farm_id !== farmId) return res.status(403).json({ error: 'Not your product' })
-    await admin.from('products').delete().eq('id', id)
-    return res.status(200).json({ success: true })
-  }
+  const { id } = req.body
+  const { data: existing } = await admin.from('products').select('farm_id').eq('id', id).single()
+  if (existing?.farm_id !== farmId) return res.status(403).json({ error: 'Not your product' })
+
+  // Check active orders
+  const { data: orders } = await admin.from('orders')
+    .select('id, items')
+    .eq('farm_id', farmId)
+    .neq('status', 'Cancelled')
+
+  const hasActiveOrder = (orders || []).some(o =>
+    (o.items || []).some(item => item.id === id)
+  )
+  if (hasActiveOrder) return res.status(400).json({ error: 'Cannot delete — product has active orders. Mark as hidden instead.' })
+
+  await admin.from('products').delete().eq('id', id)
+  return res.status(200).json({ success: true })
+}
 
   res.status(405).end()
 }

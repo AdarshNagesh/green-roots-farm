@@ -79,6 +79,8 @@ useEffect(() => {
 
   function validateCheckout() {
     if (!form.name || !form.address || !form.phone) return 'Please fill all required fields'
+    const cleanPhone = form.phone.replace(/\s+/g, '').replace(/^(\+91|91)/, '')
+if (!/^[6-9]\d{9}$/.test(cleanPhone)) return 'Please enter a valid 10-digit mobile number'
     const pc = validatePincode(form.address)
     if (!pc.valid) return pc.message
     const minErrors = validateMinOrders(cart)

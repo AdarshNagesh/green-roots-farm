@@ -106,35 +106,41 @@ export default function FarmPortal() {
   }
   function removeOption(idx) { set('quantity_options', (form.quantity_options||[]).filter((_,i) => i!==idx)) }
 
-  async function saveProduct() {
-    if (!form.name || !form.price) { showToast('Name and price are required'); return }
-    if (!form.image_url && !imageFile) { showToast('Please upload a product photo'); return }
-    setSaving(true)
-    try {
-      let imageUrl = form.image_url
-      if (imageFile) { setUploading(true); imageUrl = await uploadImage(imageFile); setUploading(false) }
-      const qty_opts = (form.quantity_options||[]).filter(o => o.label && o.multiplier > 0)
-      const stockQty = form.stock_quantity === '' ? null : parseFloat(form.stock_quantity)
-      const payload = {
-        name: form.name, description: form.description, price: parseFloat(form.price),
-        unit: form.unit, category: form.category, image_url: imageUrl,
-        in_stock: form.in_stock, is_visible: form.is_visible !== false,
-        quantity_options: qty_opts.length > 0 ? qty_opts : null,
-        stock_quantity: stockQty,
-        min_order_value: form.min_order_value === '' ? null : parseFloat(form.min_order_value),
-        points_per_unit: parseInt(form.points_per_unit) || 0,
-        farm_id: farm.id,
-      }
-      const { error } = editing
-        ? await supabase.from('products').update(payload).eq('id', form.id)
-        : await supabase.from('products').insert(payload)
-      if (error) throw error
-      showToast(editing ? '✅ Product updated!' : '✅ Product added!')
-      resetForm(); loadProducts(farm.id)
-    } catch (e) { showToast('Error: ' + e.message) }
-    finally { setSaving(false); setUploading(false) }
-  }
+ async function saveProduct() {
+  if (!form.name || !form.price) { showToast('Name and price are required'); return }
+  if (!form.image_url && !imageFile) { showToast('Please upload a product photo'); return }
+  setSaving(true)
+  try {
+    let imageUrl = form.image_url
+    if (imageFile) { setUploading(true); imageUrl = await uploadImage(imageFile); setUploading(false) }
+    const qty_opts = (form.quantity_options||[]).filter(o => o.label && o.multiplier > 0)
+    const stockQty = form.stock_quantity === '' ? null : parseFloat(form.stock_quantity)
+    const payload = {
+      name: form.name, description: form.description, price: parseFloat(form.price),
+      unit: form.unit, category: form.category, image_url: imageUrl,
+      in_stock: form.in_stock, is_visible: form.is_visible !== false,
+      quantity_options: qty_opts.length > 0 ? qty_opts : null,
+      stock_quantity: stockQty,
+      min_order_value: form.min_order_value === '' ? null : parseFloat(form.min_order_value),
+      points_per_unit: parseInt(form.points_per_unit) || 0,
+    }
 
+    // Get session token
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
+    const res = await fetch('/api/farm-portal/products', {
+      method: editing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(editing ? { id: form.id, ...payload } : payload),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    showToast(editing ? '✅ Product updated!' : '✅ Product added!')
+    resetForm(); loadProducts(farm.id)
+  } catch (e) { showToast('Error: ' + e.message) }
+  finally { setSaving(false); setUploading(false) }
+}
   function resetForm() {
     setForm(BLANK); setEditing(false); setImageFile(null); setImagePreview(null)
     if (fileRef.current) fileRef.current.value = ''
@@ -148,12 +154,17 @@ export default function FarmPortal() {
     window.scrollTo({ top:0, behavior:'smooth' })
   }
 
-  async function deleteProduct(id, imageUrl) {
-    if (!confirm('Delete this product?')) return
-    if (imageUrl) await supabase.storage.from(BUCKET).remove([imageUrl.split('/').pop()])
-    await supabase.from('products').delete().eq('id', id)
-    showToast('Product removed'); loadProducts(farm.id)
-  }
+ async function deleteProduct(id, imageUrl) {
+  if (!confirm('Delete this product?')) return
+  if (imageUrl) await supabase.storage.from(BUCKET).remove([imageUrl.split('/').pop()])
+  const { data: { session } } = await supabase.auth.getSession()
+  await fetch('/api/farm-portal/products', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+    body: JSON.stringify({ id }),
+  })
+  showToast('Product removed'); loadProducts(farm.id)
+}
 
   async function updateOrderStatus(order, newStatus) {
     if (newStatus === 'Cancelled') { setCancelModal(order); setCancelReason(''); return }

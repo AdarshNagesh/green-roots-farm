@@ -12,7 +12,7 @@ const CATEGORIES     = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const UNITS          = ['kg','g','piece','bunch','dozen','litre','pack','box']
 const BUCKET         = 'product-images'
 const ORDER_STATUSES = ['Confirmed','Preparing','Out for Delivery','Delivered','Cancelled']
-const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'', min_order_value:'',points_per_unit:'0',notifyCustomers: true }
+const BLANK = { id:'', name:'', price:'', unit:'kg', category:'Vegetables', description:'', image_url:'', in_stock:true, is_visible:true, quantity_options:[], stock_quantity:'', min_order_value:'',points_per_unit:'0',notifyCustomers: true,farm_id:'' }
 const LOW_STOCK      = 5
 const PER_PAGE       = { products:10, orders:8, customers:10 }
 
@@ -50,7 +50,8 @@ const [settingsSaved, setSettingsSaved] = useState(false)
   const [fDateFrom,  setFDateFrom]  = useState('')
   const [fDateTo,    setFDateTo]    = useState('')
   const [fStatus,    setFStatus]    = useState('All')
-
+  const [farms, setFarms] = useState([])
+const [fFarm, setFFarm] = useState('All')
   const [cancelModal, setCancelModal]   = useState(null)
   const [cancelReason, setCancelReason] = useState('')
 
@@ -76,7 +77,13 @@ const [settingsSaved, setSettingsSaved] = useState(false)
       revenue:(o.data||[]).reduce((s,o)=>s+Number(o.total),0), customers:0 })
     loadCustomers()
     loadSettings()
+    loadFarms()
   }
+
+  async function loadFarms() {
+  const res = await fetch('/api/admin/farms')
+  if (res.ok) setFarms(await res.json())
+}
 
   async function loadSettings() {
   const res = await fetch('/api/settings')
@@ -145,7 +152,7 @@ async function saveSettings() {
         name:form.name, description:form.description, price:parseFloat(form.price),
         unit:form.unit, category:form.category, image_url:imageUrl, in_stock:form.in_stock,
         is_visible: form.is_visible !== false,
-        quantity_options:qty_opts.length>0?qty_opts:null, stock_quantity:stockQty,min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),points_per_unit: parseInt(form.points_per_unit) || 0,
+        quantity_options:qty_opts.length>0?qty_opts:null, stock_quantity:stockQty,min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),points_per_unit: parseInt(form.points_per_unit) || 0,farm_id: form.farm_id || null,
       }
       const { error }=editing
         ? await supabase.from('products').update(payload).eq('id',form.id)
@@ -176,7 +183,7 @@ async function saveSettings() {
   }
 
   function startEdit(prod) {
-    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false,min_order_value: prod.min_order_value ?? '',points_per_unit: prod.points_per_unit || 0,notifyCustomers: true})
+    setForm({...prod, price:String(prod.price), quantity_options:prod.quantity_options||[], stock_quantity:prod.stock_quantity??'', is_visible: prod.is_visible !== false,min_order_value: prod.min_order_value ?? '',farm_id: prod.farm_id || '',points_per_unit: prod.points_per_unit || 0,notifyCustomers: true})
     setEditing(true); setImagePreview(prod.image_url||null); setImageFile(null); setTab('products')
     window.scrollTo({top:0,behavior:'smooth'})
   }
@@ -270,9 +277,9 @@ async function saveSettings() {
 
         {/* Tabs */}
         <div style={{display:'flex',borderBottom:'2px solid var(--border)',marginBottom:24}}>
-         {['products','orders','customers','settings'].map(t=>(
+         {['products','orders','customers','farms','settings'].map(t=>(
   <button key={t} className={`tab-btn ${tab===t?'active':''}`} onClick={()=>setTab(t)}>
-    {t==='products'?'🌿 Products':t==='orders'?'📦 Orders':t==='customers'?'👥 Customers':'⚙️ Settings'}
+    {t==='products'?'🌿 Products':t==='orders'?'📦 Orders':t==='customers'?'👥 Customers':t==='farms'?'🚜 Farms':'⚙️ Settings'}
   </button>
 ))}
         </div>
@@ -384,7 +391,13 @@ async function saveSettings() {
                   {CATEGORIES.map(c=><option key={c}>{c}</option>)}
                 </select>
               </div>
-
+<div style={{marginBottom:12}}>
+  <div style={{fontSize:12,color:'var(--muted)',fontWeight:500,marginBottom:4}}>Farm Source</div>
+  <select className="inp" value={form.farm_id} onChange={e=>set('farm_id',e.target.value)}>
+    <option value="">— Select farm —</option>
+    {farms.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+  </select>
+</div>
               {/* Stock */}
               <div style={{marginBottom:16,padding:'14px 16px',background:'var(--green-pale)',borderRadius:12}}>
                 <div style={{fontWeight:600,fontSize:13,marginBottom:4}}>📦 Available Stock</div>
@@ -545,7 +558,7 @@ async function saveSettings() {
                   </button>
                 )}
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr',gap:10}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr 1fr',gap:10}}>
                 <div>
                   <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>Customer</div>
                   <input className="inp" style={{padding:'7px 10px',fontSize:13}}
@@ -581,6 +594,14 @@ async function saveSettings() {
                     {ORDER_STATUSES.map(s=><option key={s}>{s}</option>)}
                   </select>
                 </div>
+                                        <div>
+  <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>Farm</div>
+  <select className="inp" style={{padding:'7px 10px',fontSize:13}}
+    value={fFarm} onChange={e=>setFFarm(e.target.value)}>
+    <option value="All">All farms</option>
+    {farms.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+  </select>
+</div>
               </div>
             </div>
 
@@ -601,6 +622,8 @@ async function saveSettings() {
         if (fDateFrom) params.set('from', fDateFrom)
         if (fDateTo)   params.set('to', fDateTo)
         if (fStatus !== 'All') params.set('status', fStatus)
+        
+        if (fFarm !== 'All') params.set('farm_id', fFarm)
         window.open(`/api/export/orders?${params.toString()}`, '_blank')
       }}
       style={{fontSize:12,padding:'6px 14px',border:'1.5px solid var(--green)',
@@ -718,6 +741,8 @@ async function saveSettings() {
             }
           </div>
         )}
+{/* ── FARMS TAB ── */}
+{tab==='farms' && <FarmsTab farms={farms} onReload={loadFarms} showToast={showToast} />}
 {/* ── SETTINGS TAB ── */}
 {tab==='settings' && (
   <div style={{maxWidth:520}}>
@@ -840,3 +865,155 @@ async function saveSettings() {
     </>
   )
 }
+// ============================================================
+// FarmsTab component — add at the BOTTOM of pages/admin.js
+// before the final closing brace
+// ============================================================
+
+function FarmsTab({ farms, onReload, showToast }) {
+  const BLANK_FARM = { id:'', name:'', owner_name:'', email:'', phone:'', platform_fee:'0' }
+  const [form, setForm]     = useState(BLANK_FARM)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function saveFarm() {
+    if (!form.name || !form.owner_name || !form.email) {
+      showToast('Name, owner name and email are required'); return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/farms', {
+        method:  editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      showToast(editing ? '✅ Farm updated!' : '✅ Farm added!')
+      setForm(BLANK_FARM); setEditing(false); onReload()
+    } catch (e) { showToast('Error: ' + e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function toggleActive(farm) {
+    await fetch('/api/admin/farms', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ ...farm, is_active: !farm.is_active }),
+    })
+    showToast(farm.is_active ? 'Farm disabled' : 'Farm enabled')
+    onReload()
+  }
+
+  const serif = { fontFamily: 'Playfair Display, serif' }
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'1fr 380px', gap:24, alignItems:'start' }}>
+      {/* Farm list */}
+      <div>
+        <div style={{ fontWeight:600, fontSize:15, marginBottom:12 }}>Registered Farms ({farms.length})</div>
+        {farms.length === 0 ? (
+          <div className="card" style={{ padding:48, textAlign:'center', color:'var(--muted)' }}>
+            <div style={{ fontSize:36, marginBottom:10 }}>🚜</div>
+            <div style={{ fontWeight:600 }}>No farms yet — add one →</div>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {farms.map(f => (
+              <div key={f.id} className="card" style={{ padding:'14px 18px',
+                opacity: f.is_active ? 1 : 0.55 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                      <span style={{ fontWeight:700, fontSize:15 }}>{f.name}</span>
+                      {!f.is_active && (
+                        <span style={{ fontSize:10, background:'var(--red-pale)', color:'var(--red)',
+                          padding:'2px 8px', borderRadius:8, fontWeight:600 }}>Disabled</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize:13, color:'var(--muted)', lineHeight:1.8 }}>
+                      👤 {f.owner_name}<br/>
+                      ✉️ {f.email}
+                      {f.phone && <><br/>📞 {f.phone}</>}
+                    </div>
+                    <div style={{ marginTop:8, display:'flex', gap:10, flexWrap:'wrap' }}>
+                      <span style={{ fontSize:12, background:'var(--green-pale)', color:'var(--green)',
+                        padding:'3px 10px', borderRadius:8, fontWeight:600 }}>
+                        Platform fee: {f.platform_fee}%
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                    <button onClick={() => { setForm({ ...f, platform_fee: String(f.platform_fee) }); setEditing(true) }}
+                      style={{ padding:'5px 12px', border:'1px solid var(--border)', borderRadius:7,
+                        background:'transparent', cursor:'pointer', fontSize:12 }}>Edit</button>
+                    <button onClick={() => toggleActive(f)}
+                      style={{ padding:'5px 12px', border:'1px solid var(--border)', borderRadius:7,
+                        background:'transparent', cursor:'pointer', fontSize:12,
+                        color: f.is_active ? 'var(--red)' : 'var(--green)' }}>
+                      {f.is_active ? 'Disable' : 'Enable'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit form */}
+      <div className="card" style={{ padding:22, position:'sticky', top:80 }}>
+        <div style={{ fontWeight:700, fontSize:16, color:'var(--green)', marginBottom:18 }}>
+          {editing ? '✏️ Edit Farm' : '＋ Add New Farm'}
+        </div>
+
+        {[
+          { label:'Farm Name *',   key:'name',       placeholder:'e.g. Green Valley Farm' },
+          { label:'Owner Name *',  key:'owner_name', placeholder:'Full name of owner' },
+          { label:'Email *',       key:'email',      placeholder:'farm@example.com' },
+          { label:'Phone',         key:'phone',      placeholder:'+91 98765 43210' },
+        ].map(f => (
+          <div key={f.key} style={{ marginBottom:12 }}>
+            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>{f.label}</div>
+            <input className="inp" value={form[f.key]} onChange={e => set(f.key, e.target.value)} placeholder={f.placeholder} />
+          </div>
+        ))}
+
+        <div style={{ marginBottom:18 }}>
+          <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+            Platform Fee (%)
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <input className="inp" type="number" min="0" max="100" step="0.5"
+              value={form.platform_fee} onChange={e => set('platform_fee', e.target.value)}
+              placeholder="e.g. 10" style={{ flex:1 }} />
+            <span style={{ fontSize:13, color:'var(--muted)', whiteSpace:'nowrap' }}>% of order total</span>
+          </div>
+          {parseFloat(form.platform_fee) > 0 && (
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:6, lineHeight:1.6 }}>
+              Example: ₹1000 order → fee ₹{(1000 * parseFloat(form.platform_fee) / 100).toFixed(0)} → farm gets ₹{(1000 - 1000 * parseFloat(form.platform_fee) / 100).toFixed(0)}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding:'10px 12px', background:'var(--green-pale)', borderRadius:9,
+          fontSize:12, color:'var(--muted)', lineHeight:1.5, marginBottom:14 }}>
+          💡 Platform fee is deducted in the export report. Use 0 for Adarshini (your own farm).
+        </div>
+
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="btn-g" style={{ flex:1, padding:10 }} onClick={saveFarm} disabled={saving}>
+            {saving ? 'Saving…' : editing ? '💾 Update Farm' : '＋ Add Farm'}
+          </button>
+          {editing && (
+            <button className="btn-o" style={{ padding:'10px 14px' }}
+              onClick={() => { setForm(BLANK_FARM); setEditing(false) }}>Cancel</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+

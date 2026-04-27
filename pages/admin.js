@@ -229,7 +229,7 @@ async function saveSettings() {
   const filteredRevenue = filteredOrders.reduce((s,o)=>s+Number(o.total),0)
 
   function clearOrderFilters() {
-    setFCustomer(''); setFProduct(''); setFDateFrom(''); setFDateTo(''); setFStatus('All')
+    setFCustomer(''); setFProduct(''); setFDateFrom(''); setFDateTo(''); setFStatus('All'); setFFarm('All')
     setOrderPage(1)
   }
 

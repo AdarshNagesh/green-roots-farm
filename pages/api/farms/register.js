@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({
       from:    process.env.RESEND_FROM_EMAIL,
-      to:      process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+      to:      process.env.ADMIN_EMAIL,
       subject: `🚜 New Farm Registration: ${name}`,
       html:    `<p><strong>${owner_name}</strong> (${email}) has registered a new farm: <strong>${name}</strong>.</p>
                 <p>Login to Admin → Farms tab to approve or reject.</p>

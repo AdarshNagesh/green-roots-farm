@@ -20,12 +20,16 @@ function validatePincode(address) {
 
 function validateMinOrders(cart) {
   const errors = []
+  // Group by product id
+  const productTotals = {}
   for (const item of cart) {
-    if (item.min_order_value && item.min_order_value > 0) {
-      const itemTotal = (item.effective_price ?? item.price) * item.qty
-      if (itemTotal < item.min_order_value) {
-        errors.push(`${item.name}: min order ₹${item.min_order_value} (currently ₹${itemTotal.toFixed(0)})`)
-      }
+    const key = item.id
+    if (!productTotals[key]) productTotals[key] = { name: item.name, total: 0, min: item.min_order_value || 0 }
+    productTotals[key].total += (item.effective_price ?? item.price) * item.qty
+  }
+  for (const { name, total, min } of Object.values(productTotals)) {
+    if (min > 0 && total < min) {
+      errors.push(`${name}: min order ₹${min} (currently ₹${total.toFixed(0)})`)
     }
   }
   return errors
@@ -434,7 +438,7 @@ function CartItem({ item, onUpdateQty, loyaltyEnabled }) {
         </div>
         {loyaltyEnabled && item.points_per_unit > 0 && (
   <div style={{ fontSize:10, color:'var(--green)', fontWeight:500, marginTop:2 }}>
-    🎁 Earn {Math.floor(item.points_per_unit * item.qty)} pts
+    🎁 Earn {Math.floor(item.points_per_unit * item.qty * (item.multiplier || 1))} pts
   </div>
 )}
         {item.min_order_value && (item.effective_price ?? item.price) * item.qty < item.min_order_value && (

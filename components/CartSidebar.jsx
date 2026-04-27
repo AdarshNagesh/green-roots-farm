@@ -300,6 +300,15 @@ const { data, error: err } = await supabase.from('orders').insert({
               if (!pc.valid) return <div style={{ fontSize:11, color:'var(--red)', marginTop:4 }}>❌ {pc.message}</div>
               return <div style={{ fontSize:11, color:'var(--green)', marginTop:4 }}>✓ Pincode {pin} — we deliver here!</div>
             })()}
+             <div style={{ marginTop:6, padding:'8px 12px', background:'var(--bg)',
+    borderRadius:8, fontSize:11, color:'var(--muted)', lineHeight:1.7 }}>
+    💡 <strong>Tip:</strong> Open Google Maps → long press your location → copy the address → paste here. Include your <strong>pincode</strong>.
+    <br/>
+    <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
+      style={{ color:'var(--green)', fontWeight:600, textDecoration:'none' }}>
+      Open Google Maps →
+    </a>
+  </div>
           </div>
 
           <div style={{ marginBottom:18 }}>

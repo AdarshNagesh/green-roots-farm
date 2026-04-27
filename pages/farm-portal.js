@@ -40,7 +40,7 @@ export default function FarmPortal() {
   const [cancelModal, setCancelModal]   = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [loading, setLoading]   = useState(true)
-
+const [settlements, setSettlements] = useState([])
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data:{ session } }) => {
       const u = session?.user ?? null
@@ -64,6 +64,7 @@ export default function FarmPortal() {
       // Load products + orders
       loadProducts(farmData.id)
       loadOrders(farmData.id)
+      loadSettlements(farmData.id)
       setLoading(false)
     })
   }, [])
@@ -79,6 +80,11 @@ export default function FarmPortal() {
       .eq('farm_id', farmId).order('created_at', { ascending:false })
     setOrders(data||[])
   }
+
+  async function loadSettlements(farmId) {
+  const res = await fetch(`/api/admin/settlements?farm_id=${farmId}`)
+  if (res.ok) setSettlements(await res.json())
+}
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3500) }
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
@@ -269,11 +275,11 @@ export default function FarmPortal() {
 
         {/* Tabs */}
         <div style={{ display:'flex', borderBottom:'2px solid var(--border)', marginBottom:24 }}>
-          {['products','orders'].map(t => (
-            <button key={t} className={`tab-btn ${tab===t?'active':''}`} onClick={() => setTab(t)}>
-              {t === 'products' ? '🌿 My Products' : '📦 My Orders'}
-            </button>
-          ))}
+        {['products', 'orders', 'settlements'].map(t => (
+   <button key={t} className={`tab-btn ${tab===t?'active':''}`} onClick={() => setTab(t)}>
+    {t === 'products' ? '🌿 My Products' : t === 'orders' ? '📦 My Orders' : '💰 Settlements'}
+   </button>
+ ))}
         </div>
 
         {/* ── PRODUCTS TAB ── */}
@@ -514,6 +520,91 @@ export default function FarmPortal() {
             )}
           </div>
         )}
+         
+{tab === 'settlements' && (
+  <div>
+    <div style={{ fontWeight:600, fontSize:15, marginBottom:20 }}>💰 My Settlements</div>
+
+    {/* Summary card */}
+    {(() => {
+      const feePct       = parseFloat(farm?.platform_fee || 0)
+      const grossRevenue = orders.filter(o => o.status !== 'Cancelled')
+        .reduce((s, o) => s + Number(o.total), 0)
+      const platformFee  = parseFloat((grossRevenue * feePct / 100).toFixed(2))
+      const netPayable   = parseFloat((grossRevenue - platformFee).toFixed(2))
+      const totalSettled = settlements.reduce((s, x) => s + Number(x.amount), 0)
+      const pending      = parseFloat((netPayable - totalSettled).toFixed(2))
+
+      return (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:12, marginBottom:28 }}>
+          {[
+            { label:'Gross Revenue', value:`₹${grossRevenue.toLocaleString('en-IN')}`, icon:'📦', color:'var(--text)' },
+            { label:`Platform Fee (${feePct}%)`, value:`₹${platformFee.toLocaleString('en-IN')}`, icon:'🏪', color:'var(--muted)' },
+            { label:'Net Payable to You', value:`₹${netPayable.toLocaleString('en-IN')}`, icon:'💵', color:'var(--green)', bold:true },
+            { label:'Total Received', value:`₹${totalSettled.toLocaleString('en-IN')}`, icon:'✅', color:'var(--green)' },
+            { label:'Pending Balance', value:`₹${pending.toLocaleString('en-IN')}`, icon: pending > 0 ? '⏳' : '✅',
+              color: pending > 0 ? 'var(--gold)' : 'var(--green)', bold:true },
+          ].map(s => (
+            <div key={s.label} className="card" style={{ padding:'14px 16px' }}>
+              <div style={{ fontSize:20, marginBottom:4 }}>{s.icon}</div>
+              <div style={{ fontSize:18, fontWeight: s.bold ? 700 : 600, color:s.color }}>{s.value}</div>
+              <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )
+    })()}
+
+    {/* How it works */}
+    <div style={{ marginBottom:20, padding:'14px 16px', background:'var(--green-pale)',
+      borderRadius:12, fontSize:13, color:'var(--muted)', lineHeight:1.8 }}>
+      <strong style={{ color:'var(--green)' }}>How settlements work:</strong><br/>
+      Your gross revenue minus platform fee ({farm?.platform_fee || 0}%) = net payable to you.
+      Admin settles this amount periodically via UPI/bank transfer and records it here.
+      Contact admin if you have any questions about your balance.
+    </div>
+
+    {/* Settlement history */}
+    <div style={{ fontWeight:600, fontSize:14, marginBottom:12 }}>Payment History</div>
+    {settlements.length === 0 ? (
+      <div className="card" style={{ padding:40, textAlign:'center', color:'var(--muted)' }}>
+        <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
+        <div style={{ fontWeight:600 }}>No settlements recorded yet</div>
+        <div style={{ fontSize:12, marginTop:6 }}>Your first settlement will appear here once processed.</div>
+      </div>
+    ) : (
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {settlements.map(s => (
+          <div key={s.id} className="card" style={{ padding:'14px 16px' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+              <div>
+                <div style={{ fontWeight:600, fontSize:15, color:'var(--green)', marginBottom:4 }}>
+                  ₹{Number(s.amount).toLocaleString('en-IN')} received
+                </div>
+                <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.8 }}>
+                  📅 {new Date(s.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}
+                  {s.period_from && s.period_to && (
+                    <><br/>🗓️ Period: {new Date(s.period_from).toLocaleDateString('en-IN')} – {new Date(s.period_to).toLocaleDateString('en-IN')}</>
+                  )}
+                  {s.reference && <><br/>🔖 Ref: <strong>{s.reference}</strong></>}
+                </div>
+                {s.notes && (
+                  <div style={{ fontSize:12, color:'var(--muted)', marginTop:4, fontStyle:'italic' }}>
+                    📝 {s.notes}
+                  </div>
+                )}
+              </div>
+              <span style={{ fontSize:11, background:'var(--green-pale)', color:'var(--green)',
+                padding:'4px 10px', borderRadius:8, fontWeight:600, flexShrink:0 }}>
+                ✓ Paid
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
       </main>
 
       {toast && (

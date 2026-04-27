@@ -206,7 +206,7 @@ async function saveSettings() {
     }).eq('id', order.id)
     if (error) { showToast('Failed: ' + error.message); setUpdatingOrder(null); return }
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: newStatus, cancel_reason: reason } : o))
-    await sendOrderNotifications({ ...order, cancel_reason: reason }, newStatus)
+    await sendOrderNotifications({ ...order, cancel_reason: reason, farm_id: order.farm_id }, newStatus)
     showToast(`Status → ${newStatus}. Customer notified!`)
     setUpdatingOrder(null)
     if (newStatus === 'Confirmed') loadAll()
@@ -225,7 +225,7 @@ async function saveSettings() {
     return true
   })
 
-  const hasOrderFilters = fCustomer||fProduct||fDateFrom||fDateTo||fStatus!=='All'
+  const hasOrderFilters = fCustomer||fProduct||fDateFrom||fDateTo||fStatus!=='All'||fFarm!=='All'
   const filteredRevenue = filteredOrders.reduce((s,o)=>s+Number(o.total),0)
 
   function clearOrderFilters() {

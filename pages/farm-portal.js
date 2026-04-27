@@ -156,6 +156,20 @@ export default function FarmPortal() {
 
  async function deleteProduct(id, imageUrl) {
   if (!confirm('Delete this product?')) return
+
+  // Check if product has any non-cancelled orders
+  const { data: activeOrders } = await supabase.from('orders')
+    .select('id')
+    .eq('farm_id', farm.id)
+    .neq('status', 'Cancelled')
+    .contains('items', [{ id }])
+    .limit(1)
+
+  if (activeOrders && activeOrders.length > 0) {
+    showToast('❌ Cannot delete — this product has active orders. Mark as hidden instead.')
+    return
+  }
+
   if (imageUrl) await supabase.storage.from(BUCKET).remove([imageUrl.split('/').pop()])
   const { data: { session } } = await supabase.auth.getSession()
   await fetch('/api/farm-portal/products', {

@@ -221,6 +221,7 @@ async function saveSettings() {
     if(fDateFrom && new Date(o.created_at) < new Date(fDateFrom)) return false
     if(fDateTo) { const end=new Date(fDateTo); end.setHours(23,59,59,999); if(new Date(o.created_at)>end) return false }
     if(fStatus!=='All' && o.status!==fStatus) return false
+     if(fFarm!=='All' && o.farm_id!==fFarm) return false
     return true
   })
 

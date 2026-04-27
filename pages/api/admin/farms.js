@@ -6,24 +6,34 @@ const admin = createClient(
 )
 
 export default async function handler(req, res) {
-  // GET — list all farms
+  // GET — list farms
   if (req.method === 'GET') {
-   const { active } = req.query
-let query = admin.from('farms').select('*').order('created_at', { ascending: true })
-if (active === 'true') query = query.eq('is_active', true)
-const { data, error } = await query
+    const { active, pending } = req.query
+
+    let query = admin.from('farms').select('*').order('created_at', { ascending: true })
+
+    if (active === 'true') {
+      // Customer-facing: only active + approved
+      query = query.eq('is_active', true).eq('is_approved', true)
+    } else if (pending === 'true') {
+      // Admin pending list
+      query = query.eq('is_approved', false)
+    }
+    // else: all farms (admin panel default)
+
+    const { data, error } = await query
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json(data || [])
   }
 
-  // POST — create farm
+  // POST — create farm (admin manually adds)
   if (req.method === 'POST') {
     const { name, owner_name, email, phone, platform_fee } = req.body
     if (!name || !owner_name || !email) return res.status(400).json({ error: 'Name, owner name and email are required' })
     const { data, error } = await admin.from('farms').insert({
       name, owner_name, email, phone: phone || '',
       platform_fee: parseFloat(platform_fee) || 0,
-      is_active: true,
+      is_approved: true, is_active: true,
     }).select().single()
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json(data)
@@ -42,7 +52,7 @@ const { data, error } = await query
     return res.status(200).json({ success: true })
   }
 
-  // DELETE — deactivate farm (soft delete)
+  // DELETE — deactivate
   if (req.method === 'DELETE') {
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'Missing farm id' })

@@ -10,11 +10,16 @@ export default async function handler(req, res) {
   const { user_id, points_to_redeem, order_id } = req.body
   if (!user_id || !points_to_redeem || !order_id) return res.status(400).json({ error: 'Missing fields' })
 
-  // Fetch current balance
+  // ✅ Check double-redemption FIRST
+  const { data: order } = await admin.from('orders')
+    .select('points_redeemed').eq('id', order_id).single()
+  if (order?.points_redeemed > 0)
+    return res.status(400).json({ error: 'Points already redeemed for this order' })
+
+  // Then fetch balance
   const { data: profile } = await admin.from('profiles')
     .select('points_balance').eq('id', user_id).single()
   if (!profile) return res.status(404).json({ error: 'User not found' })
-
   if (profile.points_balance < points_to_redeem)
     return res.status(400).json({ error: 'Insufficient points balance' })
 

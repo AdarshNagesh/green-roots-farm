@@ -939,7 +939,7 @@ async function saveSettings() {
 // ============================================================
 
 function FarmsTab({ farms, onReload, showToast }) {
-  const BLANK_FARM = { id:'', name:'', owner_name:'', email:'', phone:'', platform_fee:'0' }
+  const BLANK_FARM = { id:'', name:'', owner_name:'', email:'', phone:'', platform_fee:'0',lat:'', lng:'', address:'', plus_code:'', pickup_instructions:''}
   const [form, setForm]         = useState(BLANK_FARM)
   const [editing, setEditing]   = useState(false)
   const [saving, setSaving]     = useState(false)
@@ -1150,7 +1150,69 @@ function FarmsTab({ farms, onReload, showToast }) {
           fontSize:12, color:'var(--muted)', marginBottom:14 }}>
           💡 Use 0% for Adarshini (your own farm).
         </div>
+<div style={{ borderTop:'1px solid var(--border)', paddingTop:16, marginTop:4, marginBottom:12 }}>
+  <div style={{ fontWeight:600, fontSize:13, color:'var(--green)', marginBottom:12 }}>
+    📍 Pickup Location Details
+  </div>
 
+  <div style={{ marginBottom:12 }}>
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+      Farm Address
+    </div>
+    <textarea className="inp" rows={2} value={form.address || ''}
+      onChange={e => set('address', e.target.value)}
+      placeholder="Full address shown to customers for pickup" />
+  </div>
+
+  <div style={{ marginBottom:12 }}>
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+      Google Plus Code
+      <span style={{ fontWeight:400 }}> — for precise location</span>
+    </div>
+    <input className="inp" value={form.plus_code || ''}
+      onChange={e => set('plus_code', e.target.value)}
+      placeholder="e.g. 7JQR+XP Mysore" />
+    <div style={{ fontSize:11, color:'var(--muted)', marginTop:4, lineHeight:1.5 }}>
+      Find it: Open Google Maps → your farm location → tap the Plus Code shown.
+      <a href="https://plus.codes" target="_blank" rel="noopener noreferrer"
+        style={{ color:'var(--green)', fontWeight:600, marginLeft:4, textDecoration:'none' }}>
+        Learn more →
+      </a>
+    </div>
+  </div>
+
+  <div style={{ marginBottom:12 }}>
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+      Pickup Instructions
+    </div>
+    <textarea className="inp" rows={2} value={form.pickup_instructions || ''}
+      onChange={e => set('pickup_instructions', e.target.value)}
+      placeholder="e.g. Available Mon–Sat 7am–10am. Call before coming." />
+  </div>
+
+  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:4 }}>
+    <div>
+      <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+        Latitude <span style={{ fontWeight:400 }}>(for delivery calc)</span>
+      </div>
+      <input className="inp" type="number" step="0.000001"
+        value={form.lat || ''} onChange={e => set('lat', e.target.value)}
+        placeholder="e.g. 12.295810" />
+    </div>
+    <div>
+      <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+        Longitude
+      </div>
+      <input className="inp" type="number" step="0.000001"
+        value={form.lng || ''} onChange={e => set('lng', e.target.value)}
+        placeholder="e.g. 76.639381" />
+    </div>
+  </div>
+  <div style={{ fontSize:11, color:'var(--muted)', lineHeight:1.5 }}>
+    💡 Open Google Maps → right-click your farm → copy the coordinates shown.
+    These are used to calculate delivery distance for customers.
+  </div>
+</div>
         <div style={{ display:'flex', gap:8 }}>
           <button className="btn-g" style={{ flex:1, padding:10 }} onClick={saveFarm} disabled={saving}>
             {saving ? 'Saving…' : editing ? '💾 Update' : '＋ Add Farm'}

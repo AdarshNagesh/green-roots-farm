@@ -100,31 +100,44 @@ useEffect(() => {
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
 
   function validateCheckout() {
-    if (!form.name || !form.address || !form.phone) return 'Please fill all required fields'
-    const cleanPhone = form.phone.replace(/\s+/g, '').replace(/^(\+91|91)/, '')
-if (!/^[6-9]\d{9}$/.test(cleanPhone)) return 'Please enter a valid 10-digit mobile number'
+  if (!form.name || !form.phone) return 'Please fill all required fields'
+  const cleanPhone = form.phone.replace(/\s+/g, '').replace(/^(\+91|91)/, '')
+  if (!/^[6-9]\d{9}$/.test(cleanPhone)) return 'Please enter a valid 10-digit mobile number'
+
+  if (deliveryType === 'delivery') {
+    if (!form.address) return 'Please enter your delivery address'
     const pc = validatePincode(form.address)
     if (!pc.valid) return pc.message
-    const minErrors = validateMinOrders(cart)
-    if (minErrors.length > 0) return 'Minimum order not met:\n' + minErrors.join('\n')
-    return null
   }
+
+  const minErrors = validateMinOrders(cart)
+  if (minErrors.length > 0) return 'Minimum order not met:\n' + minErrors.join('\n')
+  return null
+}
 async function checkDeliveryFee() {
-  if (!form.address || form.address.length < 10) {
-    showError('Please enter your full address first')
+  if (!form.address || form.address.length < 5) {
+    setError('Please enter your address first')
     return
   }
   setFeeLoading(true)
   setFeeResult(null)
   try {
     const { geocodeAddress, haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
-    const customerCoords = await geocodeAddress(form.address + ', Mysore, Karnataka')
+
+    // Detect if input is a Plus Code (e.g. 7JQR+XP or 7JQR+XP Mysore)
+    const isPlusCode = /^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,}/i.test(form.address.trim().split(' ')[0])
+
+    // Append Mysore if plus code without city
+    const searchQuery = isPlusCode
+      ? form.address.trim() + (form.address.toLowerCase().includes('mysore') ? '' : ' Mysore India')
+      : form.address + ', Mysore, Karnataka, India'
+
+    const customerCoords = await geocodeAddress(searchQuery)
     if (!customerCoords) {
-      setFeeResult({ error: 'Could not find this address. Please add your pincode.' })
+      setFeeResult({ error: 'Could not find this location. Try entering your full address with pincode instead.' })
       setFeeLoading(false)
       return
     }
-    // Use farm lat/lng if set, else default to Mysore city center
     const farmLat = parseFloat(farmInfo?.lat || 12.2958)
     const farmLng = parseFloat(farmInfo?.lng || 76.6394)
     const distKm  = haversineKm(farmLat, farmLng, customerCoords.lat, customerCoords.lng)
@@ -379,7 +392,7 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
     {/* Google Maps tip */}
     <div style={{ marginTop:6, padding:'7px 11px', background:'var(--bg)',
       borderRadius:8, fontSize:11, color:'var(--muted)', lineHeight:1.7 }}>
-      💡 Open Google Maps → long press your location → copy address → paste here.{' '}
+      💡 Open Google Maps → long press your location → copy your Google Plus Code (e.g. 7JQR+XP) or full address with pincode.{' '} → paste here.{' '}
       <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
         style={{ color:'var(--green)', fontWeight:600, textDecoration:'none' }}>
         Open Maps →

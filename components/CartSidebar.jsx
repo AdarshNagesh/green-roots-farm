@@ -4,7 +4,7 @@ import { sendOrderNotifications } from '../lib/notifications'
 
 const serif = { fontFamily: 'Playfair Display, serif' }
 
-const ALLOWED_PINCODES = Array.from({ length: 30 }, (_, i) => String(570001 + i))
+const ALLOWED_PINCODES = Array.from({ length: 32 }, (_, i) => String(570001 + i))
 
 function extractPincode(address) {
   const match = address.match(/\b(5700\d{2})\b/)

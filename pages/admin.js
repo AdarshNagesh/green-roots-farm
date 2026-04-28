@@ -789,7 +789,74 @@ async function saveSettings() {
       <button className="btn-g" style={{padding:'10px 24px'}} onClick={saveSettings}>
         {settingsSaved ? '✅ Saved!' : '💾 Save Settings'}
       </button>
+
     </div>
+                <div className="card" style={{padding:24,marginBottom:16}}>
+  <div style={{fontWeight:600,fontSize:14,color:'var(--green)',marginBottom:18}}>
+    🚚 Delivery Fee Settings
+  </div>
+
+  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:18}}>
+    <div>
+      <div style={{fontSize:12,color:'var(--muted)',fontWeight:600,marginBottom:6,
+        textTransform:'uppercase',letterSpacing:0.5}}>Base Fee (₹)</div>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <input className="inp" type="number" min="0" step="1" style={{width:100}}
+          value={settings.delivery_base_fee||'20'}
+          onChange={e=>setSettings(s=>({...s,delivery_base_fee:e.target.value}))} />
+        <span style={{fontSize:13,color:'var(--muted)'}}>₹ for first</span>
+        <input className="inp" type="number" min="0" step="0.5" style={{width:70}}
+          value={settings.delivery_base_km||'2'}
+          onChange={e=>setSettings(s=>({...s,delivery_base_km:e.target.value}))} />
+        <span style={{fontSize:13,color:'var(--muted)'}}>km</span>
+      </div>
+    </div>
+
+    <div>
+      <div style={{fontSize:12,color:'var(--muted)',fontWeight:600,marginBottom:6,
+        textTransform:'uppercase',letterSpacing:0.5}}>Per KM After Base</div>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <input className="inp" type="number" min="0" step="0.5" style={{width:100}}
+          value={settings.delivery_per_km_fee||'8'}
+          onChange={e=>setSettings(s=>({...s,delivery_per_km_fee:e.target.value}))} />
+        <span style={{fontSize:13,color:'var(--muted)'}}>₹/km</span>
+      </div>
+    </div>
+
+    <div>
+      <div style={{fontSize:12,color:'var(--muted)',fontWeight:600,marginBottom:6,
+        textTransform:'uppercase',letterSpacing:0.5}}>Maximum Cap (₹)</div>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <input className="inp" type="number" min="0" step="1" style={{width:100}}
+          value={settings.delivery_max_fee||'80'}
+          onChange={e=>setSettings(s=>({...s,delivery_max_fee:e.target.value}))} />
+        <span style={{fontSize:13,color:'var(--muted)'}}>₹ max</span>
+      </div>
+    </div>
+  </div>
+
+  {/* Live preview */}
+  <div style={{padding:'12px 14px',background:'var(--bg)',borderRadius:10,
+    fontSize:12,color:'var(--muted)',lineHeight:1.8,marginBottom:18}}>
+    <strong style={{color:'var(--text)'}}>Preview:</strong><br/>
+    {[1,2,3,5,8,10].map(km => {
+      const base    = parseFloat(settings.delivery_base_fee||20)
+      const baseKm  = parseFloat(settings.delivery_base_km||2)
+      const perKm   = parseFloat(settings.delivery_per_km_fee||8)
+      const maxFee  = parseFloat(settings.delivery_max_fee||80)
+      const fee     = Math.min(km <= baseKm ? base : base + (km - baseKm) * perKm, maxFee)
+      return (
+        <span key={km} style={{marginRight:16}}>
+          {km}km → <strong style={{color:'var(--green)'}}>₹{fee.toFixed(0)}</strong>
+        </span>
+      )
+    })}
+  </div>
+
+  <button className="btn-g" style={{padding:'10px 24px'}} onClick={saveSettings}>
+    {settingsSaved ? '✅ Saved!' : '💾 Save Settings'}
+  </button>
+</div>
   </div>
 )}
       </main>

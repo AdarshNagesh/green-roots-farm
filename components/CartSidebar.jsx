@@ -43,6 +43,12 @@ export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearC
   const [error, setError]         = useState('')
   const [rzpReady, setRzpReady]   = useState(false)
   const [loyaltyEnabled, setLoyaltyEnabled] = useState(false)
+  const [deliveryType, setDeliveryType]   = useState('delivery')
+  const [deliveryFee, setDeliveryFee]     = useState(0)
+const [feeLoading, setFeeLoading]       = useState(false)
+const [feeResult, setFeeResult]         = useState(null)  // { km, fee, error }
+const [farmInfo, setFarmInfo]           = useState(null)  // farm details for pickup
+const [settings, setSettings]           = useState({})
 
   // Points state
   const [pointsBalance, setPointsBalance] = useState(0)
@@ -53,7 +59,19 @@ const [pointsRate, setPointsRate] = useState(1)
  const discount = usePoints ? Math.min(pointsToRedeem * pointsRate, baseTotal) : 0
   const total      = Math.max(0, baseTotal - discount)
   const count      = cart.reduce((s, i) => s + i.qty, 0)
+  const grandTotal = total + (deliveryType === 'delivery' ? deliveryFee : 0)
 
+useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(data => {
+      const map = Object.fromEntries(data.map(s => [s.key, s.value]))
+      setSettings(map)
+    }).catch(() => {})
+
+    fetch('/api/admin/farms?active=true').then(r => r.json()).then(farms => {
+      if (farms && farms.length > 0) setFarmInfo(farms[0])
+    }).catch(() => {})
+  }, [])
+  
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (document.getElementById('rzp-script')) { setRzpReady(true); return }
@@ -91,7 +109,33 @@ if (!/^[6-9]\d{9}$/.test(cleanPhone)) return 'Please enter a valid 10-digit mobi
     if (minErrors.length > 0) return 'Minimum order not met:\n' + minErrors.join('\n')
     return null
   }
-
+async function checkDeliveryFee() {
+  if (!form.address || form.address.length < 10) {
+    showError('Please enter your full address first')
+    return
+  }
+  setFeeLoading(true)
+  setFeeResult(null)
+  try {
+    const { geocodeAddress, haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
+    const customerCoords = await geocodeAddress(form.address + ', Mysore, Karnataka')
+    if (!customerCoords) {
+      setFeeResult({ error: 'Could not find this address. Please add your pincode.' })
+      setFeeLoading(false)
+      return
+    }
+    // Use farm lat/lng if set, else default to Mysore city center
+    const farmLat = parseFloat(farmInfo?.lat || 12.2958)
+    const farmLng = parseFloat(farmInfo?.lng || 76.6394)
+    const distKm  = haversineKm(farmLat, farmLng, customerCoords.lat, customerCoords.lng)
+    const fee     = calcDeliveryFee(distKm, settings)
+    setDeliveryFee(fee)
+    setFeeResult({ km: distKm.toFixed(1), fee })
+  } catch (e) {
+    setFeeResult({ error: 'Could not calculate fee. Please try again.' })
+  }
+  setFeeLoading(false)
+}
   async function notifyAdmin(order) {
     try {
       await fetch('/api/notify/admin-order', {
@@ -140,6 +184,8 @@ const { data, error: err } = await supabase.from('orders').insert({
   total,
   farm_id:        farmId,   // ← add this line
   points_redeemed: usePoints ? pointsToRedeem : 0,
+  delivery_type:   deliveryType,
+delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
   status:          paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
   payment_status:  paymentStatus,
   payment_method:  paymentMethod,
@@ -265,6 +311,13 @@ const { data, error: err } = await supabase.from('orders').insert({
             <span style={{ fontSize:14, color:'var(--muted)' }}>{count} item{count!==1?'s':''}</span>
             <span style={{ ...serif, fontSize:22, fontWeight:700, color:'var(--green)' }}>₹{baseTotal.toFixed(2)}</span>
           </div>
+          {deliveryType === 'delivery' && deliveryFee > 0 && (
+  <div style={{ display:'flex', justifyContent:'space-between', fontSize:13,
+    color:'var(--muted)', marginBottom:4 }}>
+    <span>🚚 Delivery fee</span>
+    <span>₹{deliveryFee.toFixed(0)}</span>
+  </div>
+)}
           <button className="btn-g" style={{ width:'100%', padding:13, fontSize:15 }}
             disabled={validateMinOrders(cart).length > 0}
             onClick={() => setStep('checkout')}>
@@ -286,30 +339,134 @@ const { data, error: err } = await supabase.from('orders').insert({
             </div>
           ))}
 
-          <div style={{ marginBottom:11 }}>
-            <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
-              Address * <span style={{ fontWeight:400 }}>(include your 6-digit pincode)</span>
-            </div>
-            <textarea className="inp" rows={3} value={form.address}
-              onChange={e => setF('address', e.target.value)}
-              placeholder="Door no, street, area, Mysore — 570XXX" />
-            {form.address.length > 10 && (() => {
-              const pc = validatePincode(form.address)
-              const pin = extractPincode(form.address)
-              if (!pin) return <div style={{ fontSize:11, color:'var(--gold)', marginTop:4 }}>⚠️ Add your pincode (570001–570030)</div>
-              if (!pc.valid) return <div style={{ fontSize:11, color:'var(--red)', marginTop:4 }}>❌ {pc.message}</div>
-              return <div style={{ fontSize:11, color:'var(--green)', marginTop:4 }}>✓ Pincode {pin} — we deliver here!</div>
-            })()}
-             <div style={{ marginTop:6, padding:'8px 12px', background:'var(--bg)',
-    borderRadius:8, fontSize:11, color:'var(--muted)', lineHeight:1.7 }}>
-    💡 <strong>Tip:</strong> Open Google Maps → long press your location → copy the address and plus code → paste here. Include your <strong>pincode</strong>.
-    <br/>
-    <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
-      style={{ color:'var(--green)', fontWeight:600, textDecoration:'none' }}>
-      Open Google Maps →
-    </a>
+         {/* ── Delivery or Pickup toggle ── */}
+<div style={{ marginBottom:16 }}>
+  <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:8 }}>
+    Delivery Option *
   </div>
-          </div>
+  <div style={{ display:'flex', gap:8 }}>
+    {[
+      { id:'delivery', label:'🚚 Home Delivery', desc:'Delivered to your address' },
+      { id:'pickup',   label:'🏪 Self Pickup',   desc:'Collect from farm' },
+    ].map(opt => (
+      <button key={opt.id} onClick={() => {
+        setDeliveryType(opt.id)
+        setDeliveryFee(0)
+        setFeeResult(null)
+      }}
+        style={{ flex:1, padding:'10px 8px', borderRadius:10, cursor:'pointer', textAlign:'left',
+          border: `2px solid ${deliveryType===opt.id ? 'var(--green)' : 'var(--border)'}`,
+          background: deliveryType===opt.id ? 'var(--green-pale)' : 'transparent',
+          transition:'all .15s' }}>
+        <div style={{ fontSize:13, fontWeight:600,
+          color: deliveryType===opt.id ? 'var(--green)' : 'var(--text)' }}>{opt.label}</div>
+        <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{opt.desc}</div>
+      </button>
+    ))}
+  </div>
+</div>
+
+{/* ── HOME DELIVERY ── */}
+{deliveryType === 'delivery' && (
+  <div style={{ marginBottom:11 }}>
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+      Delivery Address * <span style={{ fontWeight:400 }}>(include your pincode)</span>
+    </div>
+    <textarea className="inp" rows={3} value={form.address}
+      onChange={e => setF('address', e.target.value)}
+      placeholder="Door no, street, area, Mysore — 570XXX" />
+
+    {/* Google Maps tip */}
+    <div style={{ marginTop:6, padding:'7px 11px', background:'var(--bg)',
+      borderRadius:8, fontSize:11, color:'var(--muted)', lineHeight:1.7 }}>
+      💡 Open Google Maps → long press your location → copy address → paste here.{' '}
+      <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
+        style={{ color:'var(--green)', fontWeight:600, textDecoration:'none' }}>
+        Open Maps →
+      </a>
+    </div>
+
+    {/* Check delivery fee button */}
+    <button onClick={checkDeliveryFee} disabled={feeLoading}
+      style={{ marginTop:8, width:'100%', padding:'9px', borderRadius:9, cursor:'pointer',
+        border:'1.5px solid var(--green)', background:'transparent',
+        color:'var(--green)', fontWeight:600, fontSize:13,
+        opacity: feeLoading ? 0.7 : 1 }}>
+      {feeLoading ? '⏳ Calculating…' : '📍 Check Delivery Fee'}
+    </button>
+
+    {/* Fee result */}
+    {feeResult && !feeResult.error && (
+      <div style={{ marginTop:8, padding:'10px 14px', background:'var(--green-pale)',
+        borderRadius:9, fontSize:13 }}>
+        <div style={{ fontWeight:600, color:'var(--green)', marginBottom:2 }}>
+          ✅ Delivery fee: ₹{feeResult.fee}
+        </div>
+        <div style={{ fontSize:11, color:'var(--muted)' }}>
+          Approx {feeResult.km} km from farm · Added to your total
+        </div>
+      </div>
+    )}
+    {feeResult?.error && (
+      <div style={{ marginTop:8, padding:'10px 14px', background:'var(--red-pale)',
+        borderRadius:9, fontSize:12, color:'var(--red)' }}>
+        ⚠️ {feeResult.error}
+      </div>
+    )}
+  </div>
+)}
+
+{/* ── SELF PICKUP ── */}
+{deliveryType === 'pickup' && (
+  <div style={{ marginBottom:11 }}>
+    <div style={{ padding:'14px 16px', background:'var(--green-pale)',
+      borderRadius:12, marginBottom:12 }}>
+      <div style={{ fontWeight:600, fontSize:13, color:'var(--green)', marginBottom:8 }}>
+        🏪 Pickup Location
+      </div>
+      {farmInfo ? (
+        <>
+          <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>{farmInfo.name}</div>
+          {farmInfo.address && (
+            <div style={{ fontSize:12, color:'var(--muted)', marginBottom:4, lineHeight:1.6 }}>
+              📍 {farmInfo.address}
+            </div>
+          )}
+          {farmInfo.plus_code && (
+            <div style={{ fontSize:12, color:'var(--muted)', marginBottom:8 }}>
+              🔷 Plus Code: <strong>{farmInfo.plus_code}</strong>
+            </div>
+          )}
+          {farmInfo.plus_code && (
+            <a href={`https://plus.codes/${farmInfo.plus_code}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ fontSize:12, color:'var(--green)', fontWeight:600, textDecoration:'none' }}>
+              Open in Google Maps →
+            </a>
+          )}
+          {farmInfo.pickup_instructions && (
+            <div style={{ marginTop:10, padding:'8px 12px', background:'var(--card)',
+              borderRadius:8, fontSize:12, color:'var(--muted)', lineHeight:1.6 }}>
+              📋 {farmInfo.pickup_instructions}
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ fontSize:12, color:'var(--muted)' }}>
+          Contact us to arrange pickup details.
+        </div>
+      )}
+    </div>
+
+    {/* Still need address for contact purposes */}
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
+      Your Phone / Notes for Pickup
+    </div>
+    <textarea className="inp" rows={2} value={form.address}
+      onChange={e => setF('address', e.target.value)}
+      placeholder="Any notes for pickup timing, e.g. 'Will pick up Saturday morning'" />
+  </div>
+)}
 
           <div style={{ marginBottom:18 }}>
             <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
@@ -405,7 +562,7 @@ const { data, error: err } = await supabase.from('orders').insert({
             )}
             <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700, borderTop:'1px solid var(--border)', paddingTop:6 }}>
               <span style={{ fontSize:15 }}>Total</span>
-              <span style={{ ...serif, fontSize:20, color:'var(--green)' }}>₹{total.toFixed(2)}</span>
+             <span style={{ ...serif, fontSize:20, color:'var(--green)' }}>₹{grandTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -418,8 +575,8 @@ const { data, error: err } = await supabase.from('orders').insert({
 
           <button className="btn-g" style={{ width:'100%', padding:13, fontSize:15, marginBottom:8 }}
             disabled={loading}
-            onClick={payMode==='cod' ? handleCOD : handleRazorpay}>
-            {loading ? 'Processing…' : payMode==='cod' ? '✓ Place Order (COD)' : `🔒 Pay ₹${total.toFixed(2)} Online`}
+           onClick={payMode==='cod' ? handleCOD : handleRazorpay}>
+{loading ? 'Processing…' : payMode==='cod' ? '✓ Place Order (COD)' : `🔒 Pay ₹${grandTotal.toFixed(2)} Online`}
           </button>
           <button className="btn-o" style={{ width:'100%', padding:10 }}
             onClick={() => setStep('cart')}>← Back to Cart</button>

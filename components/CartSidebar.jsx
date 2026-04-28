@@ -4,7 +4,8 @@ import { sendOrderNotifications } from '../lib/notifications'
 
 const serif = { fontFamily: 'Playfair Display, serif' }
 
-const ALLOWED_PINCODES = Array.from({ length: 32 }, (_, i) => String(570001 + i))
+// Change from 30 to 50 to cover all Mysore pincodes up to 570050
+const ALLOWED_PINCODES = Array.from({ length: 50 }, (_, i) => String(570001 + i))
 
 function extractPincode(address) {
   const match = address.match(/\b(5700\d{2})\b/)
@@ -115,33 +116,46 @@ useEffect(() => {
   return null
 }
 async function checkDeliveryFee() {
-  if (!form.address || form.address.length < 5) {
+  if (!form.address || form.address.length < 4) {
     setError('Please enter your address first')
     return
   }
   setFeeLoading(true)
   setFeeResult(null)
   try {
-    const { geocodeAddress, haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
+    const { geocodeAddress, haversineKm, calcDeliveryFee, decodePlusCode } = await import('../lib/deliveryUtils')
 
-    // Strip Plus Code prefix if present (e.g. "8H6W+FHJ, Deepanagar..." → "Deepanagar...")
-    const plusCodeRegex = /^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3},?\s*/i
-    const cleanAddress = form.address.trim().replace(plusCodeRegex, '')
+    const farmLat = parseFloat(farmInfo?.lat || 12.2958)
+    const farmLng = parseFloat(farmInfo?.lng || 76.6394)
 
-    // Use cleaned address or original if no plus code found
-    const searchQuery = (cleanAddress.length > 5 ? cleanAddress : form.address)
-      + (cleanAddress.toLowerCase().includes('karnataka') ? '' : ', Karnataka, India')
+    let customerCoords = null
 
-    const customerCoords = await geocodeAddress(searchQuery)
+    // Check if address starts with a Plus Code
+    const plusMatch = form.address.trim().match(/^([23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3})/i)
+
+    if (plusMatch) {
+      // Decode plus code directly to lat/lng — no API needed
+      customerCoords = decodePlusCode(plusMatch[1])
+      if (!customerCoords) {
+        setFeeResult({ error: 'Invalid Plus Code. Please paste the full address instead.' })
+        setFeeLoading(false)
+        return
+      }
+    } else {
+      // Strip any plus code prefix that might be in a full Google Maps copy-paste
+      const stripped = form.address.replace(/^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3},?\s*/i, '').trim()
+      const searchQuery = stripped + (stripped.toLowerCase().includes('karnataka') ? '' : ', Mysore, Karnataka, India')
+      customerCoords = await geocodeAddress(searchQuery)
+    }
+
     if (!customerCoords) {
-      setFeeResult({ error: 'Could not find this address. Please check the pincode and try again.' })
+      setFeeResult({ error: 'Could not find this address. Try your full address with pincode (e.g. 570029).' })
       setFeeLoading(false)
       return
     }
-    const farmLat = parseFloat(farmInfo?.lat || 12.2958)
-    const farmLng = parseFloat(farmInfo?.lng || 76.6394)
-    const distKm  = haversineKm(farmLat, farmLng, customerCoords.lat, customerCoords.lng)
-    const fee     = calcDeliveryFee(distKm, settings)
+
+    const distKm = haversineKm(farmLat, farmLng, customerCoords.lat, customerCoords.lng)
+    const fee    = calcDeliveryFee(distKm, settings)
     setDeliveryFee(fee)
     setFeeResult({ km: distKm.toFixed(1), fee })
   } catch (e) {

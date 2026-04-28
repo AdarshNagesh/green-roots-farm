@@ -124,17 +124,17 @@ async function checkDeliveryFee() {
   try {
     const { geocodeAddress, haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
 
-    // Detect if input is a Plus Code (e.g. 7JQR+XP or 7JQR+XP Mysore)
-    const isPlusCode = /^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,}/i.test(form.address.trim().split(' ')[0])
+    // Strip Plus Code prefix if present (e.g. "8H6W+FHJ, Deepanagar..." → "Deepanagar...")
+    const plusCodeRegex = /^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3},?\s*/i
+    const cleanAddress = form.address.trim().replace(plusCodeRegex, '')
 
-    // Append Mysore if plus code without city
-    const searchQuery = isPlusCode
-      ? form.address.trim() + (form.address.toLowerCase().includes('mysore') ? '' : ' Mysore India')
-      : form.address + ', Mysore, Karnataka, India'
+    // Use cleaned address or original if no plus code found
+    const searchQuery = (cleanAddress.length > 5 ? cleanAddress : form.address)
+      + (cleanAddress.toLowerCase().includes('karnataka') ? '' : ', Karnataka, India')
 
     const customerCoords = await geocodeAddress(searchQuery)
     if (!customerCoords) {
-      setFeeResult({ error: 'Could not find this location. Try entering your full address with pincode instead.' })
+      setFeeResult({ error: 'Could not find this address. Please check the pincode and try again.' })
       setFeeLoading(false)
       return
     }

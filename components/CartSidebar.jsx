@@ -50,7 +50,16 @@ const [feeLoading, setFeeLoading]       = useState(false)
 const [feeResult, setFeeResult]         = useState(null)  // { km, fee, error }
 const [farmInfo, setFarmInfo]           = useState(null)  // farm details for pickup
 const [settings, setSettings]           = useState({})
+// Group cart items by farm
+const cartByFarm = cart.reduce((acc, item) => {
+  const fid = item.farm_id || 'unknown'
+  if (!acc[fid]) acc[fid] = []
+  acc[fid].push(item)
+  return acc
+}, {})
 
+const uniqueFarmIds = Object.keys(cartByFarm)
+const hasMultipleFarms = uniqueFarmIds.length > 1
   // Points state
   const [pointsBalance, setPointsBalance] = useState(0)
   const [usePoints, setUsePoints]         = useState(false)
@@ -61,16 +70,17 @@ const [pointsRate, setPointsRate] = useState(1)
   const total      = Math.max(0, baseTotal - discount)
   const count      = cart.reduce((s, i) => s + i.qty, 0)
   const grandTotal = total + (deliveryType === 'delivery' ? deliveryFee : 0)
-
+const [farms, setFarms] = useState([])
 useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(data => {
       const map = Object.fromEntries(data.map(s => [s.key, s.value]))
       setSettings(map)
     }).catch(() => {})
 
-    fetch('/api/admin/farms?active=true').then(r => r.json()).then(farms => {
-      if (farms && farms.length > 0) setFarmInfo(farms[0])
-    }).catch(() => {})
+    fetch('/api/admin/farms?active=true').then(r => r.json()).then(data => {
+  setFarms(data || [])
+  if (data && data.length > 0) setFarmInfo(data[0])
+}).catch(() => {})
   }, [])
   
   useEffect(() => {
@@ -435,52 +445,42 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
 {/* ── SELF PICKUP ── */}
 {deliveryType === 'pickup' && (
   <div style={{ marginBottom:11 }}>
-    <div style={{ padding:'14px 16px', background:'var(--green-pale)',
-      borderRadius:12, marginBottom:12 }}>
-      <div style={{ fontWeight:600, fontSize:13, color:'var(--green)', marginBottom:8 }}>
-        🏪 Pickup Location
+    {hasMultipleFarms && (
+      <div style={{ padding:'8px 12px', background:'var(--gold-pale)',
+        borderRadius:8, fontSize:12, color:'var(--gold)', marginBottom:12 }}>
+        ⚠️ Your cart has items from {uniqueFarmIds.length} farms. You'll need to pick up from each separately.
       </div>
-      {farmInfo ? (
-        <>
-          <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>{farmInfo.name}</div>
-          {farmInfo.address && (
-            <div style={{ fontSize:12, color:'var(--muted)', marginBottom:4, lineHeight:1.6 }}>
-              📍 {farmInfo.address}
-            </div>
-          )}
-          {farmInfo.plus_code && (
-            <div style={{ fontSize:12, color:'var(--muted)', marginBottom:8 }}>
-              🔷 Plus Code: <strong>{farmInfo.plus_code}</strong>
-            </div>
-          )}
-          {farmInfo.plus_code && (
-            <a href={`https://plus.codes/${farmInfo.plus_code}`}
-              target="_blank" rel="noopener noreferrer"
+    )}
+    {uniqueFarmIds.map(farmId => {
+      const f = farms.find(x => x.id === farmId) || farmInfo
+      return f ? (
+        <div key={farmId} style={{ padding:'14px 16px', background:'var(--green-pale)',
+          borderRadius:12, marginBottom:12 }}>
+          <div style={{ fontWeight:600, fontSize:13, color:'var(--green)', marginBottom:8 }}>
+            🏪 {f.name}
+          </div>
+          {f.address && <div style={{ fontSize:12, color:'var(--muted)', marginBottom:4 }}>📍 {f.address}</div>}
+          {f.plus_code && <div style={{ fontSize:12, color:'var(--muted)', marginBottom:6 }}>🔷 {f.plus_code}</div>}
+          {f.plus_code && (
+            <a href={`https://maps.google.com/?q=${f.plus_code}`} target="_blank"
+              rel="noopener noreferrer"
               style={{ fontSize:12, color:'var(--green)', fontWeight:600, textDecoration:'none' }}>
               Open in Google Maps →
             </a>
           )}
-          {farmInfo.pickup_instructions && (
-            <div style={{ marginTop:10, padding:'8px 12px', background:'var(--card)',
-              borderRadius:8, fontSize:12, color:'var(--muted)', lineHeight:1.6 }}>
-              📋 {farmInfo.pickup_instructions}
+          {f.pickup_instructions && (
+            <div style={{ marginTop:8, fontSize:12, color:'var(--muted)', lineHeight:1.6,
+              padding:'8px 12px', background:'var(--card)', borderRadius:8 }}>
+              📋 {f.pickup_instructions}
             </div>
           )}
-        </>
-      ) : (
-        <div style={{ fontSize:12, color:'var(--muted)' }}>
-          Contact us to arrange pickup details.
         </div>
-      )}
-    </div>
-
-    {/* Still need address for contact purposes */}
-    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>
-      Your Phone / Notes for Pickup
-    </div>
+      ) : null
+    })}
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:4 }}>Notes for Pickup</div>
     <textarea className="inp" rows={2} value={form.address}
       onChange={e => setF('address', e.target.value)}
-      placeholder="Any notes for pickup timing, e.g. 'Will pick up Saturday morning'" />
+      placeholder="e.g. Will pick up Saturday morning" />
   </div>
 )}
 

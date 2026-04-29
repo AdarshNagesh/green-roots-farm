@@ -123,41 +123,24 @@ async function checkDeliveryFee() {
   setFeeLoading(true)
   setFeeResult(null)
   try {
-    const { geocodeAddress, haversineKm, calcDeliveryFee, decodePlusCode } = await import('../lib/deliveryUtils')
+    const { haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
 
-    const farmLat = parseFloat(farmInfo?.lat || 12.2958)
-    const farmLng = parseFloat(farmInfo?.lng || 76.6394)
+    // Call your server-side geocode API
+    const geoRes = await fetch(`/api/geocode?address=${encodeURIComponent(form.address + ', Mysore, Karnataka')}`)
+    const geo    = await geoRes.json()
 
-    let customerCoords = null
-
-    // Check if address starts with a Plus Code
-    const plusMatch = form.address.trim().match(/^([23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3})/i)
-
-    if (plusMatch) {
-      // Decode plus code directly to lat/lng — no API needed
-      customerCoords = decodePlusCode(plusMatch[1])
-      if (!customerCoords) {
-        setFeeResult({ error: 'Invalid Plus Code. Please paste the full address instead.' })
-        setFeeLoading(false)
-        return
-      }
-    } else {
-      // Strip any plus code prefix that might be in a full Google Maps copy-paste
-      const stripped = form.address.replace(/^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3},?\s*/i, '').trim()
-      const searchQuery = stripped + (stripped.toLowerCase().includes('karnataka') ? '' : ', Mysore, Karnataka, India')
-      customerCoords = await geocodeAddress(searchQuery)
-    }
-
-    if (!customerCoords) {
-      setFeeResult({ error: 'Could not find this address. Try your full address with pincode (e.g. 570029).' })
+    if (!geo.found) {
+      setFeeResult({ error: 'Could not find this address. Please check and try again.' })
       setFeeLoading(false)
       return
     }
 
-    const distKm = haversineKm(farmLat, farmLng, customerCoords.lat, customerCoords.lng)
-    const fee    = calcDeliveryFee(distKm, settings)
+    const farmLat = parseFloat(farmInfo?.lat || 12.2958)
+    const farmLng = parseFloat(farmInfo?.lng || 76.6394)
+    const distKm  = haversineKm(farmLat, farmLng, geo.lat, geo.lng)
+    const fee     = calcDeliveryFee(distKm, settings)
     setDeliveryFee(fee)
-    setFeeResult({ km: distKm.toFixed(1), fee })
+    setFeeResult({ km: distKm.toFixed(1), fee, formatted: geo.formatted })
   } catch (e) {
     setFeeResult({ error: 'Could not calculate fee. Please try again.' })
   }
@@ -423,23 +406,20 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
     </button>
 
     {/* Fee result */}
-    {feeResult && !feeResult.error && (
-      <div style={{ marginTop:8, padding:'10px 14px', background:'var(--green-pale)',
-        borderRadius:9, fontSize:13 }}>
-        <div style={{ fontWeight:600, color:'var(--green)', marginBottom:2 }}>
-          ✅ Delivery fee: ₹{feeResult.fee}
-        </div>
-        <div style={{ fontSize:11, color:'var(--muted)' }}>
-          Approx {feeResult.km} km from farm · Added to your total
-        </div>
+   {feeResult && !feeResult.error && (
+  <div style={{ marginTop:8, padding:'10px 14px', background:'var(--green-pale)',
+    borderRadius:9, fontSize:13 }}>
+    <div style={{ fontWeight:600, color:'var(--green)', marginBottom:4 }}>
+      ✅ Delivery fee: ₹{feeResult.fee}
+    </div>
+    {feeResult.formatted && (
+      <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>
+        📍 {feeResult.formatted}
       </div>
     )}
-    {feeResult?.error && (
-      <div style={{ marginTop:8, padding:'10px 14px', background:'var(--red-pale)',
-        borderRadius:9, fontSize:12, color:'var(--red)' }}>
-        ⚠️ {feeResult.error}
-      </div>
-    )}
+    <div style={{ fontSize:11, color:'var(--muted)' }}>
+      Approx {feeResult.km} km from farm
+    </div>
   </div>
 )}
 

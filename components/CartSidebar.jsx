@@ -587,7 +587,7 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
           </button>
           <button className="btn-o" style={{ width:'100%', padding:10 }}
             onClick={() => setStep('cart')}>← Back to Cart</button>
-        </div>}
+        </div>
       </div>
     </div>
   )

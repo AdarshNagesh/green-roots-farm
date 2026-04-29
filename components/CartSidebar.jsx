@@ -125,7 +125,6 @@ async function checkDeliveryFee() {
   try {
     const { haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
 
-    // Call your server-side geocode API
     const geoRes = await fetch(`/api/geocode?address=${encodeURIComponent(form.address + ', Mysore, Karnataka')}`)
     const geo    = await geoRes.json()
 

@@ -421,6 +421,16 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
     </div>
   </div>
 )}
+{feeResult?.error && (
+  <div style={{ marginTop:8, padding:'10px 14px', background:'var(--red-pale)',
+    borderRadius:9, fontSize:12, color:'var(--red)' }}>
+    ⚠️ {feeResult.error}
+  </div>
+)}
+  </div>
+)}
+
+{/* ── SELF PICKUP ── */}
 
 {/* ── SELF PICKUP ── */}
 {deliveryType === 'pickup' && (
@@ -586,7 +596,7 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
           </button>
           <button className="btn-o" style={{ width:'100%', padding:10 }}
             onClick={() => setStep('cart')}>Back to Cart</button>
-        </div>
+        </div>}
       </div>
     </div>
   )

@@ -129,10 +129,10 @@ async function checkDeliveryFee() {
     const geo    = await geoRes.json()
 
     if (!geo.found) {
-      setFeeResult({ error: 'Could not find this address. Please check and try again.' })
-      setFeeLoading(false)
-      return
-    }
+  setFeeResult({ error: `Could not find address. ${geo.error || geo.status || ''}` })
+  setFeeLoading(false)
+  return
+}
 
     const farmLat = parseFloat(farmInfo?.lat || 12.2958)
     const farmLng = parseFloat(farmInfo?.lng || 76.6394)

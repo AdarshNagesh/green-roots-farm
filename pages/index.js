@@ -412,6 +412,12 @@ const farmChannel = supabase.channel('farms_live')
   }
 }, [])
 
+    useEffect(() => {
+  import('@sentry/nextjs').then(Sentry => {
+    Sentry.captureMessage('Sentry test from Adarshini mobile')
+  })
+}, [])
+
   async function fetchProducts() {
     setLoading(true)
     const { data } = await supabase.from('products').select('*').order('created_at', { ascending:false })
@@ -634,12 +640,7 @@ const filtered = products.filter(p=>
           {toast}
         </div>
       )}
-       
-<button onClick={() => { throw new Error('Sentry test error from Adarshini') }}
-  style={{ position:'fixed', bottom:10, right:10, background:'red', color:'#fff',
-    padding:'8px 16px', borderRadius:8, cursor:'pointer', zIndex:9999 }}>
-  Test Sentry
-</button>
+
     </>
   )
 }

@@ -25,16 +25,18 @@ function NotifyMeButton({ productId, userId, userEmail }) {
   }, [])
 
   async function toggle() {
-    setLoading(true)
-    const method = onList ? 'DELETE' : 'POST'
-    await fetch('/api/waitlist', {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, user_email: userEmail, product_id: productId }),
-    })
-    setOnList(!onList)
-    setLoading(false)
-  }
+  setLoading(true)
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  const method = onList ? 'DELETE' : 'POST'
+  await fetch('/api/waitlist', {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ user_id: userId, user_email: userEmail, product_id: productId }),
+  })
+  setOnList(!onList)
+  setLoading(false)
+}
 
   return (
     <button onClick={toggle} disabled={loading}

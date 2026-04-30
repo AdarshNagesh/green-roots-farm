@@ -46,7 +46,7 @@ function NotifyMeButton({ productId, userId, userEmail }) {
         color: onList ? 'var(--green)' : 'var(--muted)',
         fontFamily:'DM Sans, sans-serif' }}>
       {loading ? '…' : onList ? '🔔 Notifying' : '🔔 Notify Me'}
-    
+    </button>
   )
 }
 

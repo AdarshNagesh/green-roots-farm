@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '../../lib/adminAuth'
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -6,7 +7,7 @@ const admin = createClient(
 )
 
 export default async function handler(req, res) {
-  // GET — fetch all settings or a specific key
+  // GET — public (used by cart, shop, farm portal)
   if (req.method === 'GET') {
     const { key } = req.query
     if (key) {
@@ -18,8 +19,10 @@ export default async function handler(req, res) {
     return res.status(200).json(data || [])
   }
 
-  // POST — upsert a setting
+  // POST — admin only
   if (req.method === 'POST') {
+    const adminUser = await requireAdmin(req, res)
+    if (!adminUser) return
     const { key, value } = req.body
     if (!key || value === undefined) return res.status(400).json({ error: 'Missing key or value' })
     const { error } = await admin.from('settings')

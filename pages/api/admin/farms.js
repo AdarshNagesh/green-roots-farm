@@ -6,23 +6,26 @@ const admin = createClient(
 )
 
 export default async function handler(req, res) {
+   // Public GET for active farms (used by shop and cart)
+  if (req.method === 'GET' && req.query.active === 'true') {
+    const { data, error } = await admin.from('farms')
+      .select('*')
+      .eq('is_active', true)
+      .eq('is_approved', true)
+      .order('created_at', { ascending: true })
+    if (error) return res.status(500).json({ error: error.message })
+    return res.status(200).json(data || [])
+  }
+
+  // All other routes require admin
   const adminUser = await requireAdmin(req, res)
-  if (!adminUser) return  // already sent 401/403
-  // GET — list farms
+  if (!adminUser) return
+
+  // GET — admin list (all farms or pending)
   if (req.method === 'GET') {
-    const { active, pending } = req.query
-
+    const { pending } = req.query
     let query = admin.from('farms').select('*').order('created_at', { ascending: true })
-
-    if (active === 'true') {
-      // Customer-facing: only active + approved
-      query = query.eq('is_active', true).eq('is_approved', true)
-    } else if (pending === 'true') {
-      // Admin pending list
-      query = query.eq('is_approved', false)
-    }
-    // else: all farms (admin panel default)
-
+    if (pending === 'true') query = query.eq('is_approved', false)
     const { data, error } = await query
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json(data || [])

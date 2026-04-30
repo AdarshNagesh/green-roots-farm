@@ -168,14 +168,16 @@ async function checkDeliveryFee() {
     } catch (e) { console.error('Admin notify failed:', e) }
   }
 
-  async function awardPoints(orderId) {
-    try {
-      await fetch('/api/credits/earn', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId, user_id: user.id }),
-      })
-    } catch (e) { console.error('Points award failed:', e) }
-  }
+ async function awardPoints(orderId) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    await fetch('/api/credits/earn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ order_id: orderId, user_id: user.id }),
+    })
+  } catch (e) { console.error('Points award failed:', e) }
+}
 
   
 
@@ -216,16 +218,18 @@ async function checkDeliveryFee() {
   }
 
   // Redeem points only on first order
-  if (usePoints && pointsToRedeem > 0 && orderIds.length > 0) {
-    await fetch('/api/credits/redeem', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: user.id,
-        points_to_redeem: pointsToRedeem,
-        order_id: orderIds[0].id,
-      }),
-    })
-  }
+ if (usePoints && pointsToRedeem > 0 && orderIds.length > 0) {
+  const { data: { session } } = await supabase.auth.getSession()
+  await fetch('/api/credits/redeem', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+    body: JSON.stringify({
+      user_id: user.id,
+      points_to_redeem: pointsToRedeem,
+      order_id: orderIds[0].id,
+    }),
+  })
+}
 
   return orderIds
 }

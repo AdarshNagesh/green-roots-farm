@@ -3,8 +3,36 @@ const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+const registerRateLimit = new Map()
+
+function isRateLimited(ip) {
+  const now = Date.now()
+  const windowMs = 60 * 60 * 1000 // 1 hour
+  const maxRequests = 3 // max 3 registrations per IP per hour
+
+  if (!registerRateLimit.has(ip)) {
+    registerRateLimit.set(ip, { count: 1, start: now })
+    return false
+  }
+  const entry = registerRateLimit.get(ip)
+  if (now - entry.start > windowMs) {
+    registerRateLimit.set(ip, { count: 1, start: now })
+    return false
+  }
+  if (entry.count >= maxRequests) return true
+  entry.count++
+  return false
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress
+if (isRateLimited(ip)) {
+  return res.status(429).json({ error: 'Too many registration attempts. Please try again later.' })
+}
+  
   const { name, owner_name, email, phone, upi_id, description, city, owner_id,
           address, plus_code, pickup_instructions, lat, lng } = req.body
   if (!name || !owner_name || !email || !owner_id)
@@ -15,6 +43,7 @@ export default async function handler(req, res) {
     if (existing.is_approved) return res.status(400).json({ error: 'You already have an approved farm.' })
     return res.status(400).json({ error: 'Your farm registration is already pending approval.' })
   }
+  
   const { data: farm, error } = await admin.from('farms').insert({
     name, owner_name, email,
     phone:                phone || '',

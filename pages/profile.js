@@ -46,15 +46,18 @@ export default function ProfilePage() {
     if (data) setForm({ name: data.name || '', phone: data.phone || '' })
   }
 
-  async function loadCredits(userId) {
-    const res = await fetch(`/api/credits/balance?user_id=${userId}`)
-    if (!res.ok) return
-    const d = await res.json()
-    setPointsBalance(d.points_balance || 0)
-    setReferralCode(d.referral_code || '')
-    setReferredBy(d.referred_by || null)
-    setTransactions(d.transactions || [])
-  }
+ async function loadCredits(userId) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`/api/credits/balance?user_id=${userId}`, {
+    headers: { 'Authorization': `Bearer ${session?.access_token}` }
+  })
+  if (!res.ok) return
+  const d = await res.json()
+  setPointsBalance(d.points_balance || 0)
+  setReferralCode(d.referral_code || '')
+  setReferredBy(d.referred_by || null)
+  setTransactions(d.transactions || [])
+}
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type })

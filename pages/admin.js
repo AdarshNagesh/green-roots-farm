@@ -105,9 +105,11 @@ const [fFarm, setFFarm] = useState('All')
 }
 
 async function saveSettings() {
+  const token = await getToken()
   await Promise.all(Object.entries(settings).map(([key, value]) =>
     fetch('/api/settings', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ key, value }),
     })
   ))
@@ -631,15 +633,21 @@ async function saveSettings() {
       </div>
     )}
     <button
-      onClick={() => {
-        const params = new URLSearchParams()
-        if (fDateFrom) params.set('from', fDateFrom)
-        if (fDateTo)   params.set('to', fDateTo)
-        if (fStatus !== 'All') params.set('status', fStatus)
-        
-        if (fFarm !== 'All') params.set('farm_id', fFarm)
-        window.open(`/api/export/orders?${params.toString()}`, '_blank')
-      }}
+     onClick={async () => {
+  const token = await getToken()
+  const params = new URLSearchParams()
+  if (fDateFrom) params.set('from', fDateFrom)
+  if (fDateTo)   params.set('to', fDateTo)
+  if (fStatus !== 'All') params.set('status', fStatus)
+  if (fFarm !== 'All') params.set('farm_id', fFarm)
+  const res = await fetch(`/api/export/orders?${params.toString()}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'orders.csv'; a.click()
+}}
       style={{fontSize:12,padding:'6px 14px',border:'1.5px solid var(--green)',
         borderRadius:8,background:'var(--green-pale)',color:'var(--green)',
         cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:5}}>
@@ -731,13 +739,16 @@ async function saveSettings() {
       <div style={{display:'flex',alignItems:'center',gap:6}}>
         <span style={{fontSize:11,color:'var(--muted)'}}>Loyalty</span>
         <div onClick={async () => {
-          const newVal = !c.loyalty_enabled
-          await fetch('/api/admin/toggle-loyalty', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ user_id: c.id, loyalty_enabled: newVal })
-          })
-          setCustomers(prev => prev.map(x => x.id===c.id ? {...x, loyalty_enabled: newVal} : x))
-        }}
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  const newVal = !c.loyalty_enabled
+  await fetch('/api/admin/toggle-loyalty', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ user_id: c.id, loyalty_enabled: newVal })
+  })
+  setCustomers(prev => prev.map(x => x.id===c.id ? {...x, loyalty_enabled: newVal} : x))
+}}
           style={{width:36,height:20,borderRadius:10,cursor:'pointer',position:'relative',
             background: c.loyalty_enabled ? 'var(--green)' : 'var(--border)',
             transition:'background .2s'}}>
@@ -962,10 +973,19 @@ function FarmsTab({ farms, onReload, showToast }) {
   useEffect(() => { loadPending() }, [])
 
   async function loadPending() {
-    const res = await fetch('/api/admin/farms?pending=true')
+   const token = await getToken()
+  const res = await fetch('/api/admin/farms?pending=true', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
     if (res.ok) setPending(await res.json())
   }
 
+  // Add this helper inside FarmsTab
+  async function getToken() {
+    const { supabase } = await import('../lib/supabase')
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token
+  }
   async function handleApproval(farmId, action) {
     setApproving(farmId)
     const res = await fetch('/api/farms/approve', {
@@ -987,11 +1007,12 @@ function FarmsTab({ farms, onReload, showToast }) {
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/farms', {
-        method:  editing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(form),
-      })
+       const token = await getToken()
+  const res = await fetch('/api/admin/farms', {
+    method:  editing ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body:    JSON.stringify(form),
+  })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       showToast(editing ? '✅ Farm updated!' : '✅ Farm added!')
@@ -1001,13 +1022,15 @@ function FarmsTab({ farms, onReload, showToast }) {
   }
 
   async function toggleActive(farm) {
-    await fetch('/api/admin/farms', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...farm, is_active: !farm.is_active }),
-    })
-    showToast(farm.is_active ? 'Farm disabled' : 'Farm enabled')
-    onReload()
-  }
+  const token = await getToken()
+  await fetch('/api/admin/farms', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ ...farm, is_active: !farm.is_active }),
+  })
+  showToast(farm.is_active ? 'Farm disabled' : 'Farm enabled')
+  onReload()
+}
 
   const approvedFarms = farms.filter(f => f.is_approved)
   const serif = { fontFamily: 'Playfair Display, serif' }
@@ -1255,12 +1278,21 @@ function SettlementTab({ orders, farms, adminEmail, showToast }) {
 
   useEffect(() => { loadSettlements() }, [])
 
-  async function loadSettlements() {
-    setLoading(true)
-    const res = await fetch('/api/admin/settlements')
-    if (res.ok) setSettlements(await res.json())
-    setLoading(false)
+  async function getToken() {
+    const { supabase } = await import('../lib/supabase')
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token
   }
+  
+  async function loadSettlements() {
+  setLoading(true)
+  const token = await getToken()
+  const res = await fetch('/api/admin/settlements', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  if (res.ok) setSettlements(await res.json())
+  setLoading(false)
+}
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
@@ -1285,10 +1317,12 @@ function SettlementTab({ orders, farms, adminEmail, showToast }) {
     if (!selectedFarm || !form.amount) { showToast('Select farm and enter amount'); return }
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/settlements', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, farm_id: selectedFarm, settled_by: adminEmail }),
-      })
+      const token = await getToken()
+const res = await fetch('/api/admin/settlements', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+  body: JSON.stringify({ ...form, farm_id: selectedFarm, settled_by: adminEmail }),
+})
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       showToast('✅ Settlement recorded!')
@@ -1299,13 +1333,15 @@ function SettlementTab({ orders, farms, adminEmail, showToast }) {
   }
 
   async function deleteSettlement(id) {
-    if (!confirm('Remove this settlement record?')) return
-    await fetch('/api/admin/settlements', {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    })
-    showToast('Removed'); loadSettlements()
-  }
+  if (!confirm('Remove this settlement record?')) return
+  const token = await getToken()
+  await fetch('/api/admin/settlements', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ id }),
+  })
+  showToast('Removed'); loadSettlements()
+}
 
   const serif = { fontFamily: 'Playfair Display, serif' }
   const activeFarms = farms.filter(f => f.is_approved)

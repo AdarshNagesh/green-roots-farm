@@ -11,6 +11,7 @@ export default function InvoicePage() {
   const [order, setOrder]   = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState('')
+  const [farm, setFarm] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -20,6 +21,11 @@ export default function InvoicePage() {
         .select('*').eq('id', id).eq('user_id', session.user.id).single()
       if (err || !data) { setError('Order not found'); setLoading(false); return }
       setOrder(data); setLoading(false)
+      if (data.farm_id) {
+        const { data: farmData } = await supabase.from('farms')
+          .select('name, address, phone, email').eq('id', data.farm_id).single()
+        if (farmData) setFarm(farmData)
+      }
     })
   }, [id])
 
@@ -139,13 +145,25 @@ export default function InvoicePage() {
             )}
           </div>
         </div>
-
+          {farm && (
+          <div style={{ marginTop:16, marginBottom:20, padding:'12px 14px', background:'#f5f0e6',
+            borderRadius:9 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'#687165', textTransform:'uppercase',
+                letterSpacing:1, marginBottom:6 }}>Fulfilled By</div>
+              <div style={{ fontWeight:600, fontSize:14, color:'#1e2d1c', marginBottom:2 }}>
+                🚜 {farm.name}
+              </div>
+              {farm.address && <div style={{ fontSize:12, color:'#687165' }}>📍 {farm.address}</div>}
+            </div>
+          )}
         {/* Items table */}
         <table style={{ width:'100%', borderCollapse:'collapse', marginBottom:24 }}>
           <thead>
             <tr style={{ background:'#f5f0e6' }}>
               <th style={{ padding:'10px 14px', textAlign:'left', fontSize:12, fontWeight:700,
                 color:'#687165', textTransform:'uppercase', letterSpacing:0.5 }}>Item</th>
+              <th style={{ padding:'10px 14px', textAlign:'left', fontSize:12, fontWeight:700,
+                color:'#687165', textTransform:'uppercase', letterSpacing:0.5 }}>Farm</th>
               <th style={{ padding:'10px 14px', textAlign:'center', fontSize:12, fontWeight:700,
                 color:'#687165', textTransform:'uppercase', letterSpacing:0.5 }}>Qty</th>
               <th style={{ padding:'10px 14px', textAlign:'right', fontSize:12, fontWeight:700,
@@ -161,6 +179,9 @@ export default function InvoicePage() {
                   <div style={{ fontWeight:500 }}>{item.name}</div>
                   {item.selected_option && <div style={{ fontSize:12, color:'#687165' }}>{item.selected_option}</div>}
                 </td>
+                <td style={{ padding:'12px 14px', fontSize:12, color:'#687165' }}>
+                  {farm?.name || '—'}
+                </td>
                 <td style={{ padding:'12px 14px', textAlign:'center', fontSize:14, color:'#1e2d1c' }}>
                   {item.qty} {item.unit}
                 </td>
@@ -175,7 +196,7 @@ export default function InvoicePage() {
           </tbody>
           <tfoot>
             <tr style={{ background:'#f5f0e6' }}>
-              <td colSpan="3" style={{ padding:'14px', textAlign:'right', fontWeight:700, fontSize:16 }}>
+              <td colSpan="4" style={{ padding:'14px', textAlign:'right', fontWeight:700, fontSize:16 }}>
                 Total
               </td>
               <td style={{ padding:'14px', textAlign:'right', fontWeight:700, fontSize:20, color:'#2d6a27' }}>

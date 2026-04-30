@@ -6,11 +6,11 @@ const nextConfig = {
 }
 
 module.exports = withSentryConfig(nextConfig, {
-  silent: true,         // suppress CLI output
-  org:    'adarshinifarm',   // your Sentry org slug
-  project:'javascript-nextjs', // your Sentry project slug
-}, {
+  org:     'adarshinifarm',
+  project: 'javascript-nextjs',
+  silent:  false,              // ← change to false so we can see logs
   widenClientFileUpload: true,
-  hideSourceMaps: true, // don't expose source maps to browser
+  hideSourceMaps: true,
   disableLogger: true,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 })

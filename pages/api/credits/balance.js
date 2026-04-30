@@ -7,9 +7,15 @@ const admin = createClient(
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
+  // Verify token
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (!token) return res.status(401).json({ error: 'Unauthorized' })
+  const { data: { user }, error: authErr } = await admin.auth.getUser(token)
+  if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' })
   const { user_id } = req.query
   if (!user_id) return res.status(400).json({ error: 'Missing user_id' })
-
+ // Can only check your own balance
+  if (user.id !== user_id) return res.status(403).json({ error: 'Forbidden' })
   const { data, error } = await admin.from('profiles')
   .select('points_balance, referral_code, referred_by, loyalty_enabled')
   .eq('id', user_id).single()

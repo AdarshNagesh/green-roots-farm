@@ -54,7 +54,7 @@ const [settingsSaved, setSettingsSaved] = useState(false)
 const [fFarm, setFFarm] = useState('All')
   const [cancelModal, setCancelModal]   = useState(null)
   const [cancelReason, setCancelReason] = useState('')
-
+const [ordersHasMore, setOrdersHasMore] = useState(false)
   const [prodPage, setProdPage]   = useState(1)
   const [orderPage, setOrderPage] = useState(1)
   const [custPage, setCustPage]   = useState(1)
@@ -67,18 +67,34 @@ const [fFarm, setFFarm] = useState('All')
     })
   }, [])
 
-  async function loadAll() {
-    const [p, o] = await Promise.all([
-      supabase.from('products').select('*').order('created_at', { ascending:false }),
-      supabase.from('orders').select('*').order('created_at', { ascending:false }),
-    ])
-    setProducts(p.data||[]); setOrders(o.data||[])
-    setStats({ products:(p.data||[]).length, orders:(o.data||[]).length,
-      revenue:(o.data||[]).reduce((s,o)=>s+Number(o.total),0), customers:0 })
-    loadCustomers()
-    loadSettings()
-    loadFarms()
-  }
+ async function loadAll() {
+  const [p, statsRes] = await Promise.all([
+    supabase.from('products').select('*').order('created_at', { ascending:false }),
+    supabase.from('orders').select('id, total', { count:'exact' })
+      .order('created_at', { ascending:false }),
+  ])
+
+  const { data: ordersData, count: ordersCount } = await supabase
+    .from('orders').select('*', { count:'exact' })
+    .order('created_at', { ascending:false })
+    .range(0, 199)
+
+  setProducts(p.data||[])
+  setOrders(ordersData||[])
+  setOrdersHasMore((ordersCount || 0) > 200)
+
+  const totalRevenue = (statsRes.data||[]).reduce((s,o) => s + Number(o.total), 0)
+  setStats({
+    products:  (p.data||[]).length,
+    orders:    ordersCount || 0,
+    revenue:   totalRevenue,
+    customers: 0,
+  })
+
+  loadCustomers()
+  loadSettings()
+  loadFarms()
+}
 
   async function loadFarms() {
     const token = await getToken()
@@ -711,6 +727,21 @@ async function saveSettings() {
                   <Pagination page={orderPage} total={filteredOrders.length} perPage={PER_PAGE.orders} onChange={setOrderPage} />
                 </>
             }
+{ordersHasMore && (
+  <div style={{ textAlign:'center', marginTop:16 }}>
+    <button className="btn-o" style={{ padding:'8px 24px' }}
+      onClick={async () => {
+        const { data } = await supabase.from('orders')
+          .select('*')
+          .order('created_at', { ascending:false })
+          .range(orders.length, orders.length + 199)
+        setOrders(prev => [...prev, ...(data||[])])
+        setOrdersHasMore((data||[]).length === 200)
+      }}>
+      Load more orders
+    </button>
+  </div>
+)}
           </div>
         )}
 

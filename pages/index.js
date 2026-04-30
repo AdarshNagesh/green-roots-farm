@@ -619,14 +619,19 @@ const filtered = products.filter(p=>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       {showCart && (
-        <CartSidebar cart={cart} user={user}
-          onClose={() => setShowCart(false)}
-          onUpdateQty={updateQty}
-          onClearCart={() => {
-  setCart([])
-  try { localStorage.removeItem('adarshini_cart') } catch {}
-}} />
-      )}
+  <CartSidebar cart={cart} user={user}
+    onClose={() => setShowCart(false)}
+    onUpdateQty={updateQty}
+    onClearCart={() => {
+      setCart([])
+      try { localStorage.removeItem('adarshini_cart') } catch {}
+    }}
+    getToken={async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      return session?.access_token
+    }}
+  />
+)}
 
       {toast && (
         <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)',

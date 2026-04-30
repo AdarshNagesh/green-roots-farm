@@ -988,10 +988,12 @@ function FarmsTab({ farms, onReload, showToast }) {
   }
   async function handleApproval(farmId, action) {
     setApproving(farmId)
-    const res = await fetch('/api/farms/approve', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ farm_id: farmId, action }),
-    })
+     const token = await getToken()
+  const res = await fetch('/api/farms/approve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ farm_id: farmId, action }),
+  })
     if (res.ok) {
       showToast(action === 'approve' ? '✅ Farm approved! Owner notified.' : '❌ Registration rejected.')
       loadPending(); onReload()

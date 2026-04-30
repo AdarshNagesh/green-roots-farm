@@ -57,7 +57,7 @@ const cartByFarm = cart.reduce((acc, item) => {
   acc[fid].push(item)
   return acc
 }, {})
-
+const [placedFarmEmails, setPlacedFarmEmails] = useState([])
 const uniqueFarmIds = Object.keys(cartByFarm)
 const hasMultipleFarms = uniqueFarmIds.length > 1
   // Points state
@@ -240,6 +240,10 @@ async function checkDeliveryFee() {
         notes: form.notes, user_email: user.email }),
       awardPoints(order.id),
     ]))
+    const farmEmails = farms
+  .filter(f => uniqueFarmIds.includes(f.id))
+  .map(f => f.email)
+setPlacedFarmEmails(farmEmails)
     onClearCart(); setStep('done')
   } catch (e) { setError(e.message) }
   finally { setLoading(false) }
@@ -284,6 +288,10 @@ async function checkDeliveryFee() {
             notes: form.notes, user_email: user.email }),
           awardPoints(order.id),
         ]))
+        const farmEmails = farms
+  .filter(f => uniqueFarmIds.includes(f.id))
+  .map(f => f.email)
+setPlacedFarmEmails(farmEmails)
         onClearCart(); setStep('done')
       },
       modal: { ondismiss: () => setLoading(false) },
@@ -313,14 +321,11 @@ async function checkDeliveryFee() {
             <div style={{ fontSize:52, marginBottom:16 }}>✅</div>
             <div style={{ ...serif, fontSize:22, fontWeight:700, color:'var(--green)', marginBottom:8 }}>Order Placed!</div>
             <div style={{ fontSize:14, color:'var(--muted)', lineHeight:1.7 }}>
-             Confirmation sent to <strong>{user.email}</strong>
-{uniqueFarmIds.filter(id => id !== 'unknown').length > 0 && (
+     Confirmation sent to <strong>{user.email}</strong>
+{placedFarmEmails.length > 0 && (
   <>
-    {' '}and farm owner{uniqueFarmIds.length > 1 ? 's' : ''} (
-    {farms
-      .filter(f => uniqueFarmIds.includes(f.id))
-      .map(f => f.email)
-      .join(', ')}
+    {' '}and farm owner{placedFarmEmails.length > 1 ? 's' : ''} (
+    {placedFarmEmails.join(', ')}
     )
   </>
 )}.<br/>We'll be in touch shortly!

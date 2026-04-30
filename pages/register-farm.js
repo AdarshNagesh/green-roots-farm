@@ -17,8 +17,9 @@ export default function RegisterFarm() {
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState('')
   const [form, setForm] = useState({
-    name:'', owner_name:'', email:'', phone:'', upi_id:'', description:'', city:'Mysore'
-  })
+  name:'', owner_name:'', email:'', phone:'', upi_id:'', description:'', city:'Mysore',
+  address:'', plus_code:'', pickup_instructions:'', lat:'', lng:''
+})
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => {
@@ -71,6 +72,8 @@ export default function RegisterFarm() {
     if (!form.name.trim()) { setError('Farm name is required'); return }
     if (!form.owner_name.trim()) { setError('Owner name is required'); return }
     if (!form.email.trim()) { setError('Email is required'); return }
+    if (!form.address.trim()) { setError('Farm address is required'); return }
+if (!form.plus_code.trim()) { setError('Google Plus Code is required'); return }
     setLoading(true)
     try {
       const res = await fetch('/api/farms/register', {
@@ -156,7 +159,68 @@ export default function RegisterFarm() {
                   onChange={e => set(f.key, e.target.value)} placeholder={f.placeholder} />
               </div>
             ))}
+{/* Pickup Location */}
+<div style={{ borderTop:'1px solid var(--border)', paddingTop:18, marginBottom:14, marginTop:4 }}>
+  <div style={{ ...serif, fontSize:15, fontWeight:700, color:'var(--green)', marginBottom:4 }}>
+    📍 Pickup Location
+  </div>
+  <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.6, marginBottom:14 }}>
+    Customers choosing self-pickup will see this information. Required for approval.
+  </div>
 
+  <div style={{ marginBottom:14 }}>
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:5 }}>
+      Farm Address *
+    </div>
+    <textarea className="inp" rows={2} value={form.address}
+      onChange={e => set('address', e.target.value)}
+      placeholder="Full address shown to customers for pickup" />
+  </div>
+
+  <div style={{ marginBottom:14 }}>
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:5 }}>
+      Google Plus Code *
+      <span style={{ fontWeight:400 }}> — for precise location</span>
+    </div>
+    <input className="inp" value={form.plus_code}
+      onChange={e => set('plus_code', e.target.value)}
+      placeholder="e.g. 7JQR+XP Mysore" />
+    <div style={{ fontSize:11, color:'var(--muted)', marginTop:4, lineHeight:1.5 }}>
+      Open Google Maps → tap your farm location → tap the Plus Code shown at the bottom.
+    </div>
+  </div>
+
+  <div style={{ marginBottom:14 }}>
+    <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:5 }}>
+      Pickup Instructions
+    </div>
+    <textarea className="inp" rows={2} value={form.pickup_instructions}
+      onChange={e => set('pickup_instructions', e.target.value)}
+      placeholder="e.g. Available Mon–Sat 7am–10am. Call before coming." />
+  </div>
+
+  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+    <div>
+      <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:5 }}>
+        Latitude <span style={{ fontWeight:400 }}>(for delivery calc)</span>
+      </div>
+      <input className="inp" type="number" step="0.000001"
+        value={form.lat} onChange={e => set('lat', e.target.value)}
+        placeholder="e.g. 12.295810" />
+    </div>
+    <div>
+      <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:5 }}>
+        Longitude
+      </div>
+      <input className="inp" type="number" step="0.000001"
+        value={form.lng} onChange={e => set('lng', e.target.value)}
+        placeholder="e.g. 76.639381" />
+    </div>
+  </div>
+  <div style={{ fontSize:11, color:'var(--muted)', marginTop:6, lineHeight:1.5 }}>
+    💡 Google Maps → long press your farm → copy the coordinates shown.
+  </div>
+</div>
             <div style={{ marginBottom:18 }}>
               <div style={{ fontSize:12, color:'var(--muted)', fontWeight:500, marginBottom:5 }}>
                 About Your Farm

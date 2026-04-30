@@ -36,7 +36,7 @@ function validateMinOrders(cart) {
   return errors
 }
 
-export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearCart }) {
+export default function CartSidebar({ cart, user, onClose, onUpdateQty, onClearCart, getToken }) {
   const [step, setStep]           = useState('cart')
   const [payMode, setPayMode]     = useState('cod')
   const [form, setForm]           = useState({ name:'', address:'', phone:'', notes:'' })
@@ -146,9 +146,8 @@ async function checkDeliveryFee() {
   try {
     const { haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token
-  console.log('token exists:', !!token) // remove after debugging
+ const token = await getToken()
+  console.log('token exists:', !!token)
 const geoRes = await fetch(
   `/api/geocode?address=${encodeURIComponent(form.address + ', Mysore, Karnataka')}`,
   { headers: { 'Authorization': token ? `Bearer ${token}` : '' } }

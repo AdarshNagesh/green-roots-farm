@@ -167,15 +167,20 @@ const geoRes = await fetch(
   }
   setFeeLoading(false)
 }
-  async function notifyAdmin(order) {
+async function notifyAdmin(order) {
   try {
-    await fetch('/api/notify/admin-order', {
+    const { data: { session } } = await supabase.auth.getSession()
+    await fetch('/api/notify/order', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_API_SECRET,
+        'Authorization': `Bearer ${session?.access_token}`,
       },
-      body: JSON.stringify({ order }),
+      body: JSON.stringify({
+        order,
+        newStatus: order.status || 'Confirmed',
+        notifyAdminToo: true,
+      }),
     })
   } catch (e) { console.error('Admin notify failed:', e) }
 }

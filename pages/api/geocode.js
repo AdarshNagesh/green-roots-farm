@@ -44,11 +44,13 @@ export default async function handler(req, res) {
 
   // ── Cache lookup ──────────────────────────────────────────
   const cacheKey = address.toLowerCase().trim()
-  const { data: cached } = await admin.from('geocode_cache')
-    .select('lat, lng, formatted').eq('address_key', cacheKey).single()
-  if (cached) {
-    return res.status(200).json({ found: true, lat: cached.lat, lng: cached.lng, formatted: cached.formatted, cached: true })
-  }
+  try {
+    const { data: cached } = await admin.from('geocode_cache')
+      .select('lat, lng, formatted').eq('address_key', cacheKey).maybeSingle()
+    if (cached) {
+      return res.status(200).json({ found: true, lat: cached.lat, lng: cached.lng, formatted: cached.formatted, cached: true })
+    }
+  } catch (e) { /* cache miss — proceed to Google */ }
   // ─────────────────────────────────────────────────────────
 
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`

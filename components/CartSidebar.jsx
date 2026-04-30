@@ -94,14 +94,18 @@ useEffect(() => {
 
   // Fetch points balance when checkout step opens
 useEffect(() => {
-  if (user) {   // ← remove the step === 'checkout' condition
-    fetch(`/api/credits/balance?user_id=${user.id}`)
-      .then(r => r.json())
-      .then(d => {
-        setPointsBalance(d.points_balance || 0)
-        setPointsToRedeem(d.points_balance || 0)
-        setLoyaltyEnabled(d.loyalty_enabled || false)
+  if (user) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetch(`/api/credits/balance?user_id=${user.id}`, {
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
       })
+        .then(r => r.json())
+        .then(d => {
+          setPointsBalance(d.points_balance || 0)
+          setPointsToRedeem(d.points_balance || 0)
+          setLoyaltyEnabled(d.loyalty_enabled || false)
+        })
+    })
     fetch('/api/settings?key=points_to_rupee_rate')
       .then(r => r.json())
       .then(d => setPointsRate(parseFloat(d.value) || 1))
@@ -139,7 +143,11 @@ async function checkDeliveryFee() {
   try {
     const { haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
 
-    const geoRes = await fetch(`/api/geocode?address=${encodeURIComponent(form.address + ', Mysore, Karnataka')}`)
+  const { data: { session } } = await supabase.auth.getSession()
+const geoRes = await fetch(
+  `/api/geocode?address=${encodeURIComponent(form.address + ', Mysore, Karnataka')}`,
+  { headers: { 'Authorization': `Bearer ${session?.access_token}` } }
+)
     const geo    = await geoRes.json()
 
     if (!geo.found) {
@@ -181,7 +189,7 @@ async function checkDeliveryFee() {
 
   
 
- async function createDBOrders(paymentMethod, paymentStatus) {
+ async function createDBOrders(paymentMethod, paymentStatus, razorpayOrderId = null) {
   const orderIds = []
 
   for (const [farmId, items] of Object.entries(cartByFarm)) {
@@ -211,6 +219,7 @@ async function checkDeliveryFee() {
       status:          paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
       payment_status:  paymentStatus,
       payment_method:  paymentMethod,
+      razorpay_order_id: razorpayOrderId,
     }).select().single()
 
     if (err) throw err
@@ -268,7 +277,7 @@ onClearCart(); setStep('done')
     const rzpOrder = await res.json()
     if (!res.ok) throw new Error(rzpOrder.error)
 
-    const dbOrders = await createDBOrders('razorpay', 'pending')
+    const dbOrders = await createDBOrders('razorpay', 'pending', rzpOrder.orderId)
 
     const options = {
       key:         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,

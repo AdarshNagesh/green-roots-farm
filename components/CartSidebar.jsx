@@ -240,11 +240,10 @@ async function checkDeliveryFee() {
         notes: form.notes, user_email: user.email }),
       awardPoints(order.id),
     ]))
-    const farmEmails = farms
-  .filter(f => uniqueFarmIds.includes(f.id))
-  .map(f => f.email)
+   const orderFarmIds = orders.map(o => o.farm_id).filter(Boolean)
+const farmEmails = farms.filter(f => orderFarmIds.includes(f.id)).map(f => f.email)
 setPlacedFarmEmails(farmEmails)
-    onClearCart(); setStep('done')
+onClearCart(); setStep('done')
   } catch (e) { setError(e.message) }
   finally { setLoading(false) }
 }
@@ -288,11 +287,10 @@ setPlacedFarmEmails(farmEmails)
             notes: form.notes, user_email: user.email }),
           awardPoints(order.id),
         ]))
-        const farmEmails = farms
-  .filter(f => uniqueFarmIds.includes(f.id))
-  .map(f => f.email)
+     const orderFarmIds = dbOrders.map(o => o.farm_id).filter(Boolean)
+const farmEmails = farms.filter(f => orderFarmIds.includes(f.id)).map(f => f.email)
 setPlacedFarmEmails(farmEmails)
-        onClearCart(); setStep('done')
+onClearCart(); setStep('done')
       },
       modal: { ondismiss: () => setLoading(false) },
     }

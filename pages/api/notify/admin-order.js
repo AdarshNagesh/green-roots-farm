@@ -14,13 +14,15 @@ export default async function handler(req, res) {
   if (!order || !ADMIN_EMAIL) return res.status(200).json({ skipped: true })
 
   // Fetch farm owner email if order has farm_id
-  let farmOwnerEmail = null
-  let farmName       = null
-  if (order.farm_id) {
-    const { data: farm } = await adminClient.from('farms')
-      .select('email, name').eq('id', order.farm_id).single()
-    if (farm) { farmOwnerEmail = farm.email; farmName = farm.name }
-  }
+  // Get all unique farm IDs from order items
+const farmIds = [...new Set((order.items || []).map(i => i.farm_id).filter(Boolean))]
+let farms = []
+if (farmIds.length > 0) {
+  const { data } = await adminClient.from('farms')
+    .select('email, name, id').in('id', farmIds)
+  farms = data || []
+}
+const farmName = farms.length === 1 ? farms[0].name : 'Multiple Farms'
 
   const itemsHtml = (order.items || []).map(i =>
     `<tr>
@@ -73,8 +75,12 @@ export default async function handler(req, res) {
 
   try {
     // Build recipients — always admin, plus farm owner if different
-    const to = [ADMIN_EMAIL]
-    if (farmOwnerEmail && farmOwnerEmail !== ADMIN_EMAIL) to.push(farmOwnerEmail)
+   const to = [ADMIN_EMAIL]
+farms.forEach(f => {
+  if (f.email && f.email !== ADMIN_EMAIL && !to.includes(f.email)) {
+    to.push(f.email)
+  }
+})
 
     await resend.emails.send({
       from:    process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',

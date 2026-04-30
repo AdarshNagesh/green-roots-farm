@@ -802,11 +802,11 @@ async function saveSettings() {
         textTransform:'uppercase',letterSpacing:0.5}}>Base Fee (₹)</div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <input className="inp" type="number" min="0" step="1" style={{width:100}}
-          value={settings.delivery_base_fee||'20'}
+          value={settings.delivery_base_fee ?? ''}
           onChange={e=>setSettings(s=>({...s,delivery_base_fee:e.target.value}))} />
         <span style={{fontSize:13,color:'var(--muted)'}}>₹ for first</span>
         <input className="inp" type="number" min="0" step="0.5" style={{width:70}}
-          value={settings.delivery_base_km||'2'}
+          value={settings.delivery_base_km ?? ''}
           onChange={e=>setSettings(s=>({...s,delivery_base_km:e.target.value}))} />
         <span style={{fontSize:13,color:'var(--muted)'}}>km</span>
       </div>
@@ -817,7 +817,7 @@ async function saveSettings() {
         textTransform:'uppercase',letterSpacing:0.5}}>Per KM After Base</div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <input className="inp" type="number" min="0" step="0.5" style={{width:100}}
-          value={settings.delivery_per_km_fee||'8'}
+          value={settings.delivery_per_km_fee ?? ''}
           onChange={e=>setSettings(s=>({...s,delivery_per_km_fee:e.target.value}))} />
         <span style={{fontSize:13,color:'var(--muted)'}}>₹/km</span>
       </div>
@@ -828,7 +828,7 @@ async function saveSettings() {
         textTransform:'uppercase',letterSpacing:0.5}}>Maximum Cap (₹)</div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <input className="inp" type="number" min="0" step="1" style={{width:100}}
-          value={settings.delivery_max_fee||'80'}
+          value={settings.delivery_max_fee ?? ''}
           onChange={e=>setSettings(s=>({...s,delivery_max_fee:e.target.value}))} />
         <span style={{fontSize:13,color:'var(--muted)'}}>₹ max</span>
       </div>

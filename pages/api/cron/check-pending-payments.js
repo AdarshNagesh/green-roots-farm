@@ -13,7 +13,7 @@ const razorpay = new Razorpay({
 
 export default async function handler(req, res) {
   // Allow Vercel cron scheduler OR manual calls with secret
-const isVercelCron = req.headers['x-vercel-cron'] === '1'
+const isVercelCron = req.headers['user-agent'] === 'vercel-cron/1.0'
 const isManualCron = req.headers['x-cron-secret'] === process.env.CRON_SECRET
 if (!isVercelCron && !isManualCron)
   return res.status(401).json({ error: 'Unauthorized' })

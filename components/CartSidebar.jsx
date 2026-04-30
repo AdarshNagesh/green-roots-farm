@@ -115,11 +115,15 @@ useEffect(() => {
   const cleanPhone = form.phone.replace(/\s+/g, '').replace(/^(\+91|91)/, '')
   if (!/^[6-9]\d{9}$/.test(cleanPhone)) return 'Please enter a valid 10-digit mobile number'
 
-  if (deliveryType === 'delivery') {
-    if (!form.address) return 'Please enter your delivery address'
+ if (deliveryType === 'delivery') {
+  if (!form.address) return 'Please enter your delivery address'
+  // Skip pincode check if address is a Plus Code (contains '+')
+  const isPlusCode = form.address.trim().includes('+')
+  if (!isPlusCode) {
     const pc = validatePincode(form.address)
     if (!pc.valid) return pc.message
   }
+}
 
   const minErrors = validateMinOrders(cart)
   if (minErrors.length > 0) return 'Minimum order not met:\n' + minErrors.join('\n')

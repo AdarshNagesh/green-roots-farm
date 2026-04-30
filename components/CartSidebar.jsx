@@ -113,7 +113,10 @@ useEffect(() => {
 }, [user])   // ← trigger on user, not step
 
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
-
+function normalizePhone(phone) {
+  const clean = phone.replace(/\s+/g, '').replace(/^(\+91|91)/, '')
+  return `+91${clean}`
+}
   function validateCheckout() {
   if (!form.name || !form.phone) return 'Please fill all required fields'
   const cleanPhone = form.phone.replace(/\s+/g, '').replace(/^(\+91|91)/, '')
@@ -232,7 +235,7 @@ async function notifyAdmin(order) {
       user_email:      user.email,
       customer_name:   form.name,
       address:         form.address,
-      phone:           form.phone,
+      phone:           normalizePhone(form.phone),
       notes:           form.notes || null,
       items:           farmItems,
       total:           farmTotal,
@@ -267,6 +270,7 @@ async function notifyAdmin(order) {
   return orderIds
 }
 
+  
  async function handleCOD() {
   const err = validateCheckout(); if (err) { setError(err); return }
   setLoading(true)
@@ -274,10 +278,10 @@ async function notifyAdmin(order) {
     const orders = await createDBOrders('cod', 'pending')
     await Promise.all(orders.flatMap(order => [
       sendOrderNotifications({ ...order, customer_name: form.name,
-        address: form.address, phone: form.phone,
+        address: form.address, phone: normalizePhone(form.phone),
         notes: form.notes, user_email: user.email }, 'Confirmed'),
       notifyAdmin({ ...order, customer_name: form.name,
-        address: form.address, phone: form.phone,
+        address: form.address, phone: normalizePhone(form.phone),
         notes: form.notes, user_email: user.email }),
       awardPoints(order.id),
     ]))
@@ -321,10 +325,10 @@ onClearCart(); setStep('done')
         if (!vData.success) { setError('Payment verification failed.'); return }
         await Promise.all(dbOrders.flatMap(order => [
           sendOrderNotifications({ ...order, customer_name: form.name,
-            address: form.address, phone: form.phone,
+            address: form.address, phone: normalizePhone(form.phone),
             notes: form.notes, user_email: user.email }, 'Confirmed'),
           notifyAdmin({ ...order, customer_name: form.name,
-            address: form.address, phone: form.phone,
+            address: form.address, phone: normalizePhone(form.phone),
             notes: form.notes, user_email: user.email }),
           awardPoints(order.id),
         ]))

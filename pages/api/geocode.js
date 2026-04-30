@@ -26,40 +26,78 @@ function isRateLimited(ip) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end()
-
-  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress
-  if (isRateLimited(ip))
-    return res.status(429).json({ found: false, error: 'Too many requests. Please wait a minute.' })
-
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  if (!token) return res.status(401).json({ found: false, error: 'Unauthorized' })
-  const { data: { user }, error: authErr } = await admin.auth.getUser(token)
-  if (authErr || !user) return res.status(401).json({ found: false, error: 'Unauthorized' })
-
-  const { address } = req.query
-  if (!address) return res.status(400).json({ error: 'Missing address' })
-
-  const cacheKey = address.toLowerCase().trim()
   try {
-    const { data: cached, error: cacheErr } = await admin.from('geocode_cache')
-      .select('lat, lng, formatted').eq('address_key', cacheKey).maybeSingle()
-    if (!cacheErr && cached) {
-      return res.status(200).json({ found: true, lat: cached.lat, lng: cached.lng, formatted: cached.formatted, cached: true })
+    if (req.method !== 'GET') return res.status(405).end()
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress
+    if (isRateLimited(ip)) {
+      return res.status(429).json({
+        found: false,
+        error: 'Too many requests. Please wait a minute.'
+      })
     }
-  } catch (e) {}
 
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`
-  const response = await fetch(url)
-  const data = await response.json()
+    const { address } = req.query
+    if (!address) {
+      return res.status(400).json({ found: false, error: 'Missing address' })
+    }
 
-  if (data.status !== 'OK' || !data.results[0])
-    return res.status(200).json({ found: false, status: data.status, error: data.error_message })
+    const cacheKey = address.toLowerCase().trim()
 
-  const { lat, lng } = data.results[0].geometry.location
-  const formatted = data.results[0].formatted_address
+    // ✅ Check cache
+    try {
+      const { data: cached } = await admin
+        .from('geocode_cache')
+        .select('lat, lng, formatted')
+        .eq('address_key', cacheKey)
+        .maybeSingle()
 
-  await admin.from('geocode_cache').upsert({ address_key: cacheKey, lat, lng, formatted }).catch(() => {})
+      if (cached) {
+        return res.status(200).json({
+          found: true,
+          lat: cached.lat,
+          lng: cached.lng,
+          formatted: cached.formatted,
+          cached: true
+        })
+      }
+    } catch (e) {
+      console.error('Cache read failed:', e)
+    }
 
-  return res.status(200).json({ found: true, lat, lng, formatted })
+    // ✅ Call Google API
+    if (!process.env.GOOGLE_MAPS_API_KEY) {
+      throw new Error('Missing GOOGLE_MAPS_API_KEY')
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`
+
+    const response = await fetch(url)
+    const data = await response.json()
+
+    if (data.status !== 'OK' || !data.results[0]) {
+      return res.status(200).json({
+        found: false,
+        status: data.status,
+        error: data.error_message
+      })
+    }
+
+    const { lat, lng } = data.results[0].geometry.location
+    const formatted = data.results[0].formatted_address
+
+    // ✅ Save cache (non-blocking)
+    admin.from('geocode_cache')
+      .upsert({ address_key: cacheKey, lat, lng, formatted })
+      .catch(() => {})
+
+    return res.status(200).json({ found: true, lat, lng, formatted })
+
+  } catch (err) {
+    console.error('GEOCODE ERROR:', err)
+    return res.status(500).json({
+      found: false,
+      error: err.message || 'Internal server error'
+    })
+  }
 }

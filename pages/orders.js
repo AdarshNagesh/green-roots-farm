@@ -46,14 +46,17 @@ export default function OrdersPage() {
   const [filterDateTo,   setFilterDateTo]   = useState('')
   const [filterStatus,   setFilterStatus]   = useState('All')
   const [page, setPage] = useState(1)
-
-  useEffect(() => { setPage(1) }, [filterProduct, filterDateFrom, filterDateTo, filterStatus])
+  const [farms, setFarms]           = useState([])
+  const [filterFarm, setFilterFarm] = useState('All')
+ useEffect(() => { setPage(1) }, [filterProduct, filterDateFrom, filterDateTo, filterStatus, filterFarm])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => {
       if (!session?.user) { router.replace('/'); return }
       setUser(session.user)
       fetchOrders(session.user.id)
+      fetch('/api/admin/farms?active=true')
+  .then(r => r.json()).then(d => setFarms(d || [])).catch(() => {})
     })
     const { data:{ subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!session?.user) router.replace('/')
@@ -88,24 +91,25 @@ export default function OrdersPage() {
   )].sort()
 
   const filtered = orders.filter(o => {
-    if (filterProduct && !(o.items||[]).some(i => i.name===filterProduct)) return false
-    if (filterDateFrom && new Date(o.created_at) < new Date(filterDateFrom)) return false
-    if (filterDateTo) {
-      const end = new Date(filterDateTo); end.setHours(23,59,59,999)
-      if (new Date(o.created_at) > end) return false
-    }
-    if (filterStatus !== 'All' && o.status !== filterStatus) return false
-    return true
-  })
+  if (filterProduct && !(o.items||[]).some(i => i.name===filterProduct)) return false
+  if (filterDateFrom && new Date(o.created_at) < new Date(filterDateFrom)) return false
+  if (filterDateTo) {
+    const end = new Date(filterDateTo); end.setHours(23,59,59,999)
+    if (new Date(o.created_at) > end) return false
+  }
+  if (filterStatus !== 'All' && o.status !== filterStatus) return false
+  if (filterFarm !== 'All' && o.farm_id !== filterFarm) return false  // ← add this
+  return true
+})
 
-  const hasFilters  = filterProduct || filterDateFrom || filterDateTo || filterStatus !== 'All'
+  const hasFilters = filterProduct || filterDateFrom || filterDateTo || filterStatus !== 'All' || filterFarm !== 'All'
   const pagedOrders = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE)
   const stepIndex   = (status) => STATUS_STEPS.indexOf(status)
 
   function clearFilters() {
-    setFilterProduct(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterStatus('All')
-    setPage(1)
-  }
+  setFilterProduct(''); setFilterDateFrom(''); setFilterDateTo('')
+  setFilterStatus('All'); setFilterFarm('All'); setPage(1)
+}
 
   return (
     <>
@@ -135,7 +139,7 @@ export default function OrdersPage() {
                 </button>
               )}
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10 }}>
+            <div style={{ display:'grid', gridTemplateColumns:`repeat(${farms.length > 1 ? 5 : 4}, 1fr)`, gap:10 }}>
               <div>
                 <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
                   textTransform:'uppercase', letterSpacing:0.5 }}>Product</div>
@@ -168,6 +172,17 @@ export default function OrdersPage() {
                   ))}
                 </select>
               </div>
+                  {farms.length > 1 && (
+                <div>
+                  <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, marginBottom:4,
+                    textTransform:'uppercase', letterSpacing:0.5 }}>Farm</div>
+                  <select className="inp" style={{ padding:'7px 10px', fontSize:13 }}
+                    value={filterFarm} onChange={e => { setFilterFarm(e.target.value); setPage(1) }}>
+                    <option value="All">All farms</option>
+                    {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -236,6 +251,12 @@ export default function OrdersPage() {
                             i.name+(i.selected_option?` (${i.selected_option})`:'')
                           ).join(', ')}
                         </div>
+                          {/* Add farm name below */}
+{order.farm_id && farms.find(f => f.id === order.farm_id) && (
+  <div style={{ fontSize:11, color:'var(--green)', fontWeight:500, marginTop:2 }}>
+    🚜 {farms.find(f => f.id === order.farm_id)?.name}
+  </div>
+)}
                       </div>
                     </div>
                     <div style={{ textAlign:'right', flexShrink:0 }}>
@@ -339,7 +360,7 @@ export default function OrdersPage() {
                             )}
                           </div>
                         </div>
-
+                         
                         {/* Items ordered */}
                         <div>
                           <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600,
@@ -375,7 +396,16 @@ export default function OrdersPage() {
                         </div>
 
                       </div>
-
+ {order.farm_id && farms.find(f => f.id === order.farm_id) && (
+                            <div style={{ marginTop:14, padding:'10px 14px', background:'var(--green-pale)',
+                              borderRadius:9, fontSize:13 }}>
+                              <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600,
+                                textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>Farm Source</div>
+                              <div style={{ fontWeight:600, color:'var(--green)' }}>
+                                🚜 {farms.find(f => f.id === order.farm_id)?.name}
+                              </div>
+                            </div>
+                          )}
                       {/* Invoice button — outside grid, after both columns */}
                       <div style={{ borderTop:'1px solid var(--border)', marginTop:16,
                         paddingTop:14, textAlign:'right' }}>

@@ -168,13 +168,17 @@ const geoRes = await fetch(
   setFeeLoading(false)
 }
   async function notifyAdmin(order) {
-    try {
-      await fetch('/api/notify/admin-order', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order }),
-      })
-    } catch (e) { console.error('Admin notify failed:', e) }
-  }
+  try {
+    await fetch('/api/notify/admin-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_API_SECRET,
+      },
+      body: JSON.stringify({ order }),
+    })
+  } catch (e) { console.error('Admin notify failed:', e) }
+}
 
  async function awardPoints(orderId) {
   try {

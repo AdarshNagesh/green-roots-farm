@@ -153,7 +153,16 @@ const geoRes = await fetch(
   { headers: { 'Authorization': token ? `Bearer ${token}` : '' } }
 )
   console.log('geocode status:', geoRes.status) // remove after debugging
-    const geo    = await geoRes.json()
+    const text = await geoRes.text()
+console.log('RAW RESPONSE:', text)
+
+let geo
+try {
+  geo = JSON.parse(text)
+} catch (e) {
+  console.error('Not JSON:', text)
+  throw new Error('Server returned invalid response')
+}
 console.log('Geocode response:', JSON.stringify(geo))
     if (!geo.found) {
   setFeeResult({ error: `Could not find address. ${geo.error || geo.status || ''}` })

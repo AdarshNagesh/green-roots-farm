@@ -152,7 +152,7 @@ const geoRes = await fetch(
   { headers: { 'Authorization': `Bearer ${session?.access_token}` } }
 )
     const geo    = await geoRes.json()
-
+console.log('Geocode response:', JSON.stringify(geo))
     if (!geo.found) {
   setFeeResult({ error: `Could not find address. ${geo.error || geo.status || ''}` })
   setFeeLoading(false)
@@ -165,8 +165,8 @@ const geoRes = await fetch(
     const fee     = calcDeliveryFee(distKm, settings)
     setDeliveryFee(fee)
     setFeeResult({ km: distKm.toFixed(1), fee, formatted: geo.formatted })
-  } catch (e) {
-    setFeeResult({ error: 'Could not calculate fee. Please try again.' })
+ } catch (e) {
+    setFeeResult({ error: e.message || 'Could not calculate fee. Please try again.' })
   }
   setFeeLoading(false)
 }

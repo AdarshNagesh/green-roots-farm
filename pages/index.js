@@ -319,7 +319,19 @@ function ProductCard({ product, user, onAddToCart, onViewDetail, onAuthOpen }) {
 export default function ShopPage() {
   const [user, setUser]                 = useState(null)
   const [products, setProducts]         = useState([])
-  const [cart, setCart]                 = useState([])
+  const [cart, setCart] = useState(() => {
+  if (typeof window === 'undefined') return []
+  try {
+    const saved = localStorage.getItem('adarshini_cart')
+    return saved ? JSON.parse(saved) : []
+  } catch { return [] }
+})
+  // ← Add this immediately after
+useEffect(() => {
+  try {
+    localStorage.setItem('adarshini_cart', JSON.stringify(cart))
+  } catch {}
+}, [cart])
   const [notifs, setNotifs]             = useState([])
   const [filter, setFilter]             = useState('All')
   const [search, setSearch]             = useState('')
@@ -346,9 +358,13 @@ const router = useRouter()
 }
   })
 
-  const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-    const u = session?.user ?? null
-    setUser(u)
+ const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
+  const u = session?.user ?? null
+  setUser(u)
+  if (!u) {
+    setCart([])
+    try { localStorage.removeItem('adarshini_cart') } catch {}
+  }
    if (u && router.query.portal !== '1') {
       const { data: profile } = await supabase.from('profiles')
         .select('role').eq('id', u.id).single()
@@ -604,7 +620,10 @@ const filtered = products.filter(p=>
         <CartSidebar cart={cart} user={user}
           onClose={() => setShowCart(false)}
           onUpdateQty={updateQty}
-          onClearCart={() => setCart([])} />
+          onClearCart={() => {
+  setCart([])
+  try { localStorage.removeItem('adarshini_cart') } catch {}
+}} />
       )}
 
       {toast && (

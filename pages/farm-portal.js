@@ -480,6 +480,10 @@ const [settlements, setSettlements] = useState([])
                         <div style={{ fontSize:12, color:'var(--muted)', marginTop:2 }}>
                           #{o.id.slice(0,8).toUpperCase()} · {new Date(o.created_at).toLocaleString('en-IN')}
                         </div>
+                          {/* Add below */}
+                        <div style={{ fontSize:11, color:'var(--green)', fontWeight:500, marginTop:2 }}>
+                          🚜 {farm?.name}
+                        </div>
                         <div style={{ fontSize:12, color:'var(--muted)' }}>📍 {o.address}</div>
                         <div style={{ fontSize:12, color:'var(--muted)' }}>📞 {o.phone}</div>
                         <div style={{ fontSize:12, color:'var(--muted)' }}>

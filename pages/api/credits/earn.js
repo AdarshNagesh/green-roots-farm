@@ -30,6 +30,14 @@ export default async function handler(req, res) {
       .select('*').eq('id', order_id).eq('user_id', user_id).single()
     if (!order) return res.status(403).json({ error: 'Order not found or not yours' })
 
+    // ← ADD THIS: Idempotency check — prevent double-awarding
+    const { count: existingCount } = await admin.from('credit_transactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('order_id', order_id)
+      .eq('type', 'purchase')
+    if (existingCount > 0)
+      return res.status(200).json({ success: true, pointsEarned: 0, skipped: 'already_awarded' })
+
     const productIds = [...new Set((order.items || []).map(i => i.id))]
     const { data: products } = await admin.from('products')
       .select('id, points_per_unit').in('id', productIds)

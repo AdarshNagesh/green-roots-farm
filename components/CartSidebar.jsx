@@ -147,10 +147,13 @@ async function checkDeliveryFee() {
     const { haversineKm, calcDeliveryFee } = await import('../lib/deliveryUtils')
 
   const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  console.log('token exists:', !!token) // remove after debugging
 const geoRes = await fetch(
   `/api/geocode?address=${encodeURIComponent(form.address + ', Mysore, Karnataka')}`,
-  { headers: { 'Authorization': `Bearer ${session?.access_token}` } }
+  { headers: { 'Authorization': token ? `Bearer ${token}` : '' } }
 )
+  console.log('geocode status:', geoRes.status) // remove after debugging
     const geo    = await geoRes.json()
 console.log('Geocode response:', JSON.stringify(geo))
     if (!geo.found) {

@@ -5,5 +5,5 @@ Sentry.init({
   tracesSampleRate: 0.2,      // 20% of transactions — free tier friendly
   replaysSessionSampleRate: 0, // disable replays on free tier
   environment: process.env.NODE_ENV,
-  debug: true, // ← add this temporarily
+  
 })

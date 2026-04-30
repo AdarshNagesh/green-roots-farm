@@ -8,7 +8,7 @@ const nextConfig = {
 module.exports = withSentryConfig(nextConfig, {
   org:     'adarshinifarm',
   project: 'javascript-nextjs',
-  silent:  false,              // ← change to false so we can see logs
+  silent:  true,              // ← change to false so we can see logs
   widenClientFileUpload: true,
   hideSourceMaps: true,
   disableLogger: true,

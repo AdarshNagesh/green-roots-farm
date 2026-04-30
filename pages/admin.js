@@ -81,12 +81,22 @@ const [fFarm, setFFarm] = useState('All')
   }
 
   async function loadFarms() {
-  const res = await fetch('/api/admin/farms')
+    const token = await getToken()
+  const res = await fetch('/api/admin/farms', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
   if (res.ok) setFarms(await res.json())
+}
+  async function getToken() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token
 }
 
   async function loadSettings() {
-  const res = await fetch('/api/settings')
+    const token = await getToken()
+  const res = await fetch('/api/settings', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
   if (res.ok) {
     const data = await res.json()
     const map = Object.fromEntries(data.map(s => [s.key, s.value]))
@@ -106,7 +116,10 @@ async function saveSettings() {
 }
 
   async function loadCustomers() {
-    const res = await fetch('/api/admin/customers')
+    const token = await getToken()
+    const res = await fetch('/api/admin/customers', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
     if (res.ok) { const d=await res.json(); setCustomers(d); setStats(s=>({...s,customers:d.length})) }
   }
 

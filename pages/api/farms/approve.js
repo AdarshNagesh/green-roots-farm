@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '../../../lib/adminAuth'
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -7,6 +8,8 @@ const admin = createClient(
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  const adminUser = await requireAdmin(req, res)
+  if (!adminUser) return
   const { farm_id, action } = req.body // action: 'approve' | 'reject'
   if (!farm_id || !action) return res.status(400).json({ error: 'Missing fields' })
 

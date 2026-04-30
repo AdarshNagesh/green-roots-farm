@@ -70,10 +70,10 @@ export default function InvoicePage() {
               padding:'8px 18px', cursor:'pointer', fontWeight:600, fontSize:13 }}>
             🖨️ Print / Save PDF
           </button>
-          <button onClick={() => router.back()}
+          <button onClick={() => window.close()}
             style={{ background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.5)',
               borderRadius:8, padding:'8px 18px', cursor:'pointer', fontSize:13 }}>
-            ← Back
+            ✕ Close
           </button>
         </div>
       </div>

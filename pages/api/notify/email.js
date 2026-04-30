@@ -162,19 +162,20 @@ export default async function handler(req, res) {
 </html>`
 
 try {
-    let ccEmails = []
-    if (order.farm_id) {
-      const { createClient } = await import('@supabase/supabase-js')
-      const adminClient = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      )
-      const { data: farm } = await adminClient.from('farms')
-        .select('email, name').eq('id', order.farm_id).single()
-      if (farm?.email && farm.email !== process.env.ADMIN_EMAIL) {
-        ccEmails.push(farm.email)
-      }
-    }
+  let ccEmails = []
+const farmIds = [...new Set((order.items || []).map(i => i.farm_id).filter(Boolean))]
+if (farmIds.length > 0) {
+  const { createClient } = await import('@supabase/supabase-js')
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+  const { data: farms } = await adminClient.from('farms')
+    .select('email').in('id', farmIds)
+  ccEmails = (farms || [])
+    .map(f => f.email)
+    .filter(e => e && e !== process.env.ADMIN_EMAIL)
+}
 
     const { error } = await resend.emails.send({
       from:    process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',

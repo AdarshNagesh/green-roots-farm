@@ -291,7 +291,14 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
             <div style={{ fontSize:52, marginBottom:16 }}>✅</div>
             <div style={{ ...serif, fontSize:22, fontWeight:700, color:'var(--green)', marginBottom:8 }}>Order Placed!</div>
             <div style={{ fontSize:14, color:'var(--muted)', lineHeight:1.7 }}>
-              Confirmation sent to <strong>{user.email}</strong>.<br/>We'll be in touch shortly!
+             Confirmation sent to <strong>{user.email}</strong>
+{farms.length > 0 && (
+  <>
+    {' '}and farm owner{farms.length > 1 ? 's' : ''} (
+    {farms.map(f => f.email).join(', ')}
+    )
+  </>
+)}.<br/>We'll be in touch shortly!
             </div>
             {usePoints && pointsToRedeem > 0 && (
               <div style={{ marginTop:14, padding:'10px 14px', background:'var(--green-pale)',

@@ -5,14 +5,12 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-// In-memory rate limiter — 10 requests per IP per minute
 const rateLimitMap = new Map()
 
 function isRateLimited(ip) {
   const now = Date.now()
   const windowMs = 60 * 1000
   const maxRequests = 10
-
   if (!rateLimitMap.has(ip)) {
     rateLimitMap.set(ip, { count: 1, start: now })
     return false
@@ -42,23 +40,18 @@ export default async function handler(req, res) {
   const { address } = req.query
   if (!address) return res.status(400).json({ error: 'Missing address' })
 
-  // ── Cache lookup ──────────────────────────────────────────
   const cacheKey = address.toLowerCase().trim()
- try {
+  try {
     const { data: cached, error: cacheErr } = await admin.from('geocode_cache')
       .select('lat, lng, formatted').eq('address_key', cacheKey).maybeSingle()
     if (!cacheErr && cached) {
       return res.status(200).json({ found: true, lat: cached.lat, lng: cached.lng, formatted: cached.formatted, cached: true })
     }
-  } catch (e) { /* proceed to Google */ }
-  // ─────────────────────────────────────────────────────────
+  } catch (e) {}
 
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`
   const response = await fetch(url)
   const data = await response.json()
-
-  console.log('Geocode status:', data.status)
-  if (data.error_message) console.log('Geocode error:', data.error_message)
 
   if (data.status !== 'OK' || !data.results[0])
     return res.status(200).json({ found: false, status: data.status, error: data.error_message })
@@ -66,9 +59,7 @@ export default async function handler(req, res) {
   const { lat, lng } = data.results[0].geometry.location
   const formatted = data.results[0].formatted_address
 
-  // ── Save to cache ─────────────────────────────────────────
   await admin.from('geocode_cache').upsert({ address_key: cacheKey, lat, lng, formatted }).catch(() => {})
-  // ─────────────────────────────────────────────────────────
 
   return res.status(200).json({ found: true, lat, lng, formatted })
 }

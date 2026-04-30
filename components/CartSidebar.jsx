@@ -173,103 +173,125 @@ async function checkDeliveryFee() {
     } catch (e) { console.error('Points award failed:', e) }
   }
 
-  async function redeemPoints(orderId) {
-    if (!usePoints || pointsToRedeem <= 0) return
-    try {
-      await fetch('/api/credits/redeem', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, points_to_redeem: pointsToRedeem, order_id: orderId }),
-      })
-    } catch (e) { console.error('Points redeem failed:', e) }
-  }
+  
 
-  async function createDBOrder(paymentMethod, paymentStatus) {
-    const items = cart.map(i => ({
+ async function createDBOrders(paymentMethod, paymentStatus) {
+  const orderIds = []
+
+  for (const [farmId, items] of Object.entries(cartByFarm)) {
+    const farmItems = items.map(i => ({
       id: i.id, name: i.name, image_url: i.image_url || null,
       price: i.price, effective_price: i.effective_price ?? i.price,
       selected_option: i.selected_option || null, multiplier: i.multiplier || 1,
-      unit: i.unit, qty: i.qty,
+      unit: i.unit, qty: i.qty, farm_id: i.farm_id,
     }))
-   const farmId = cart.find(i => i.farm_id)?.farm_id || null
 
-const { data, error: err } = await supabase.from('orders').insert({
-  user_id:        user.id,
-  user_email:     user.email,
-  customer_name:  form.name,
-  address:        form.address,
-  phone:          form.phone,
-  notes:          form.notes || null,
-  items,
-  total,
-  farm_id:        farmId,   // ← add this line
-  points_redeemed: usePoints ? pointsToRedeem : 0,
-  delivery_type:   deliveryType,
-delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
-  status:          paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
-  payment_status:  paymentStatus,
-  payment_method:  paymentMethod,
-}).select().single()
+    const farmTotal = farmItems.reduce((s, i) => 
+      s + (i.effective_price ?? i.price) * i.qty, 0)
+
+    const { data, error: err } = await supabase.from('orders').insert({
+      user_id:         user.id,
+      user_email:      user.email,
+      customer_name:   form.name,
+      address:         form.address,
+      phone:           form.phone,
+      notes:           form.notes || null,
+      items:           farmItems,
+      total:           farmTotal,
+      farm_id:         farmId === 'unknown' ? null : farmId,
+      points_redeemed: 0, // handle below
+      delivery_type:   deliveryType,
+      delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
+      status:          paymentMethod === 'cod' ? 'Confirmed' : 'Payment Pending',
+      payment_status:  paymentStatus,
+      payment_method:  paymentMethod,
+    }).select().single()
+
     if (err) throw err
-    return data
+    orderIds.push(data)
   }
 
-  async function handleCOD() {
-    const err = validateCheckout(); if (err) { setError(err); return }
-    setLoading(true)
-    try {
-      const order = await createDBOrder('cod', 'pending')
-      await redeemPoints(order.id)
-      await Promise.all([
-        sendOrderNotifications({ ...order, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }, 'Confirmed'),
-        notifyAdmin({ ...order, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }),
-        awardPoints(order.id),
-      ])
-      onClearCart(); setStep('done')
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
+  // Redeem points only on first order
+  if (usePoints && pointsToRedeem > 0 && orderIds.length > 0) {
+    await fetch('/api/credits/redeem', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user.id,
+        points_to_redeem: pointsToRedeem,
+        order_id: orderIds[0].id,
+      }),
+    })
   }
 
-  async function handleRazorpay() {
-    const err = validateCheckout(); if (err) { setError(err); return }
-    if (!rzpReady) { setError('Payment SDK not loaded — please try again.'); return }
-    setLoading(true); setError('')
-    try {
-      const res = await fetch('/api/razorpay/create-order', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: total }),
-      })
-      const rzpOrder = await res.json()
-      if (!res.ok) throw new Error(rzpOrder.error)
-      const dbOrder = await createDBOrder('razorpay', 'pending')
-      await redeemPoints(dbOrder.id)
-      const options = {
-        key:         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount:      rzpOrder.amount, currency: rzpOrder.currency,
-        name:        'Adarshini Organic Farm',
-        description: 'Fresh Organic Produce',
-        order_id:    rzpOrder.orderId,
-        prefill:     { name: form.name, email: user.email, contact: form.phone },
-        theme:       { color: '#2d6a27' },
-        handler: async (response) => {
-          const vRes = await fetch('/api/razorpay/verify-payment', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...response, order_id: dbOrder.id }),
-          })
-          const vData = await vRes.json()
-          if (!vData.success) { setError('Payment verification failed. Contact support.'); return }
-          await Promise.all([
-            sendOrderNotifications({ ...dbOrder, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }, 'Confirmed'),
-            notifyAdmin({ ...dbOrder, customer_name: form.name, address: form.address, phone: form.phone, notes: form.notes, user_email: user.email }),
-            awardPoints(dbOrder.id),
-          ])
-          onClearCart(); setStep('done')
-        },
-        modal: { ondismiss: () => setLoading(false) },
-      }
-      new window.Razorpay(options).open()
-      setLoading(false)
-    } catch (e) { setError(e.message); setLoading(false) }
-  }
+  return orderIds
+}
+
+ async function handleCOD() {
+  const err = validateCheckout(); if (err) { setError(err); return }
+  setLoading(true)
+  try {
+    const orders = await createDBOrders('cod', 'pending')
+    await Promise.all(orders.flatMap(order => [
+      sendOrderNotifications({ ...order, customer_name: form.name,
+        address: form.address, phone: form.phone,
+        notes: form.notes, user_email: user.email }, 'Confirmed'),
+      notifyAdmin({ ...order, customer_name: form.name,
+        address: form.address, phone: form.phone,
+        notes: form.notes, user_email: user.email }),
+      awardPoints(order.id),
+    ]))
+    onClearCart(); setStep('done')
+  } catch (e) { setError(e.message) }
+  finally { setLoading(false) }
+}
+
+ async function handleRazorpay() {
+  const err = validateCheckout(); if (err) { setError(err); return }
+  if (!rzpReady) { setError('Payment SDK not loaded — please try again.'); return }
+  setLoading(true); setError('')
+  try {
+    const res = await fetch('/api/razorpay/create-order', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: grandTotal }),
+    })
+    const rzpOrder = await res.json()
+    if (!res.ok) throw new Error(rzpOrder.error)
+
+    const dbOrders = await createDBOrders('razorpay', 'pending')
+
+    const options = {
+      key:         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      amount:      rzpOrder.amount, currency: rzpOrder.currency,
+      name:        'Adarshini Organic Farm',
+      description: 'Fresh Organic Produce',
+      order_id:    rzpOrder.orderId,
+      prefill:     { name: form.name, email: user.email, contact: form.phone },
+      theme:       { color: '#2d6a27' },
+      handler: async (response) => {
+        // Verify against first order id
+        const vRes = await fetch('/api/razorpay/verify-payment', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...response, order_id: dbOrders[0].id }),
+        })
+        const vData = await vRes.json()
+        if (!vData.success) { setError('Payment verification failed.'); return }
+        await Promise.all(dbOrders.flatMap(order => [
+          sendOrderNotifications({ ...order, customer_name: form.name,
+            address: form.address, phone: form.phone,
+            notes: form.notes, user_email: user.email }, 'Confirmed'),
+          notifyAdmin({ ...order, customer_name: form.name,
+            address: form.address, phone: form.phone,
+            notes: form.notes, user_email: user.email }),
+          awardPoints(order.id),
+        ]))
+        onClearCart(); setStep('done')
+      },
+      modal: { ondismiss: () => setLoading(false) },
+    }
+    new window.Razorpay(options).open()
+    setLoading(false)
+  } catch (e) { setError(e.message); setLoading(false) }
+}
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:500, display:'flex', justifyContent:'flex-end' }}>
@@ -292,10 +314,13 @@ delivery_fee:    deliveryType === 'delivery' ? deliveryFee : 0,
             <div style={{ ...serif, fontSize:22, fontWeight:700, color:'var(--green)', marginBottom:8 }}>Order Placed!</div>
             <div style={{ fontSize:14, color:'var(--muted)', lineHeight:1.7 }}>
              Confirmation sent to <strong>{user.email}</strong>
-{farms.length > 0 && (
+{uniqueFarmIds.filter(id => id !== 'unknown').length > 0 && (
   <>
-    {' '}and farm owner{farms.length > 1 ? 's' : ''} (
-    {farms.map(f => f.email).join(', ')}
+    {' '}and farm owner{uniqueFarmIds.length > 1 ? 's' : ''} (
+    {farms
+      .filter(f => uniqueFarmIds.includes(f.id))
+      .map(f => f.email)
+      .join(', ')}
     )
   </>
 )}.<br/>We'll be in touch shortly!

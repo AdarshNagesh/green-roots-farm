@@ -12,9 +12,11 @@ const razorpay = new Razorpay({
 })
 
 export default async function handler(req, res) {
-  // Only allow cron calls with secret
-  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET)
-    return res.status(401).json({ error: 'Unauthorized' })
+  // Allow Vercel cron scheduler OR manual calls with secret
+const isVercelCron = req.headers['x-vercel-cron'] === '1'
+const isManualCron = req.headers['x-cron-secret'] === process.env.CRON_SECRET
+if (!isVercelCron && !isManualCron)
+  return res.status(401).json({ error: 'Unauthorized' })
 
   // Find orders stuck in Payment Pending for more than 30 minutes
   const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString()

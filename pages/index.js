@@ -412,11 +412,7 @@ const farmChannel = supabase.channel('farms_live')
   }
 }, [])
 
-    useEffect(() => {
-  import('@sentry/nextjs').then(Sentry => {
-    Sentry.captureMessage('Sentry test from Adarshini mobile')
-  })
-}, [])
+    
 
   async function fetchProducts() {
     setLoading(true)

@@ -21,7 +21,16 @@ export default async function handler(req, res) {
 
   if (expected !== razorpay_signature)
     return res.status(400).json({ error: 'Invalid payment signature' })
+// After signature verification, before updating DB:
+const { data: dbOrder } = await supabaseAdmin.from('orders')
+  .select('razorpay_order_id, user_id').eq('id', order_id).single()
 
+if (!dbOrder) return res.status(404).json({ error: 'Order not found' })
+
+// Ensure the razorpay_order_id in DB matches what was signed
+if (dbOrder.razorpay_order_id && dbOrder.razorpay_order_id !== razorpay_order_id) {
+  return res.status(400).json({ error: 'Order mismatch' })
+}
   // Update order in Supabase
   const { error } = await supabaseAdmin.from('orders').update({
     payment_status:      'paid',

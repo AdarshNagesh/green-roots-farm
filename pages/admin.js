@@ -672,6 +672,11 @@ async function saveSettings() {
                             <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>#{o.id.slice(0,8).toUpperCase()} · {new Date(o.created_at).toLocaleString('en-IN')}</div>
                             <div style={{fontSize:12,color:'var(--muted)'}}>📍 {o.address}</div>
                             <div style={{fontSize:12,color:'var(--muted)'}}>📞 {o.phone}</div>
+                            {o.farm_id && farms.find(f => f.id === o.farm_id) && (
+                              <div style={{ fontSize:12, color:'var(--green)', fontWeight:500 }}>
+                                🚜 {farms.find(f => f.id === o.farm_id)?.name}
+                              </div>
+                            )}
                             <div style={{fontSize:12,color:'var(--muted)'}}>
                              {o.payment_method==='razorpay'
   ? o.payment_status==='paid'

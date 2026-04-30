@@ -10,6 +10,10 @@ const adminClient = createClient(
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  const secret = process.env.INTERNAL_API_SECRET
+  if (secret && req.headers['x-internal-secret'] !== secret)
+    return res.status(401).json({ error: 'Unauthorized' })
+
   const { order } = req.body
   if (!order || !ADMIN_EMAIL) return res.status(200).json({ skipped: true })
 

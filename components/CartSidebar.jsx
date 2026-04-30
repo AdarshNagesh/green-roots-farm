@@ -201,6 +201,21 @@ async function notifyAdmin(order) {
  async function createDBOrders(paymentMethod, paymentStatus, razorpayOrderId = null) {
   const orderIds = []
 
+  // ── Atomic stock check + deduction ──────────────────────────
+  // For COD: deduct immediately on order creation
+  // For Razorpay: only deduct after payment verified (in verify-payment.js)
+  if (paymentMethod === 'cod') {
+    const allItems = Object.values(cartByFarm).flat().map(i => ({
+      id:         i.id,
+      qty:        i.qty,
+      multiplier: i.multiplier || 1,
+    }))
+    const { data: stockResult, error: stockErr } = await supabase
+      .rpc('deduct_stock_for_order', { p_items: allItems })
+    if (stockErr) throw new Error('Stock check failed: ' + stockErr.message)
+    if (!stockResult?.success) throw new Error(stockResult?.error || 'Insufficient stock')
+  }
+
   for (const [farmId, items] of Object.entries(cartByFarm)) {
     const farmItems = items.map(i => ({
       id: i.id, name: i.name, image_url: i.image_url || null,

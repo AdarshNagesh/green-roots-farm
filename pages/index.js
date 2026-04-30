@@ -47,6 +47,11 @@ function NotifyMeButton({ productId, userId, userEmail }) {
         fontFamily:'DM Sans, sans-serif' }}>
       {loading ? '…' : onList ? '🔔 Notifying' : '🔔 Notify Me'}
     </button>
+<button onClick={() => { throw new Error('Sentry test error from Adarshini') }}
+  style={{ position:'fixed', bottom:10, right:10, background:'red', color:'#fff',
+    padding:'8px 16px', borderRadius:8, cursor:'pointer', zIndex:9999 }}>
+  Test Sentry
+</button>
   )
 }
 

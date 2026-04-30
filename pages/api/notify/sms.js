@@ -10,6 +10,11 @@ export default async function handler(req, res) {
   if (req.method !== 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
 
+  // Internal secret check
+  const secret = process.env.INTERNAL_API_SECRET
+  if (secret && req.headers['x-internal-secret'] !== secret)
+    return res.status(401).json({ error: 'Unauthorized' })
+
   const { phone, type, order } = req.body
   if (!phone || !order) return res.status(400).json({ error: 'Missing phone or order' })
 

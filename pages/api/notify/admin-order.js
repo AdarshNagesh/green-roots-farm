@@ -64,11 +64,29 @@ const farmName = farms.length === 1 ? farms[0].name : 'Multiple Farms'
         <td style="padding:10px 12px;text-align:right;font-weight:700;color:#2d6a27">Rs.${Number(order.total).toFixed(2)}</td>
       </tr></tfoot>
     </table>
+    ${order.delivery_type === 'delivery' ? `
+<div style="margin-bottom:18px;padding:14px 16px;background:#fff8e6;border-radius:10px;
+  border-left:4px solid #b87d12;font-size:13px;color:#7a5200;line-height:1.8">
+  <strong>🚚 Delivery Order — Action Required</strong><br/>
+  Please deliver your items to:<br/>
+  <strong>Adarshini Organic Farm</strong><br/>
+  before the scheduled delivery time so we can dispatch to the customer.
+</div>` : `
+<div style="margin-bottom:18px;padding:14px 16px;background:#e8f3e6;border-radius:10px;
+  border-left:4px solid #2d6a27;font-size:13px;color:#1e4d1a;line-height:1.8">
+  <strong>🏪 Pickup Order</strong><br/>
+  Customer will collect directly from your farm.
+</div>`}
     <div style="text-align:center">
       <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://adarshini.co.in'}/admin"
-        style="background:#2d6a27;color:#fff;padding:11px 24px;border-radius:9px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block">
-        Open Admin Panel →
-      </a>
+  style="background:#2d6a27;color:#fff;padding:11px 24px;border-radius:9px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block">
+  Open Admin Panel →
+</a>
+<br/><br/>
+<a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://adarshini.co.in'}/farm-portal"
+  style="background:#4a8c43;color:#fff;padding:11px 24px;border-radius:9px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block">
+  Open Farm Portal →
+</a>
     </div>
   </div>
 </div></body></html>`

@@ -6,6 +6,11 @@ export default async function handler(req, res) {
   if (req.method !== 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
 
+    // Internal secret check
+  const secret = process.env.INTERNAL_API_SECRET
+  if (secret && req.headers['x-internal-secret'] !== secret)
+    return res.status(401).json({ error: 'Unauthorized' })
+
   const { type, order, product } = req.body
 
   // ── Product notification (broadcast to all customers) ─────────────────────

@@ -198,6 +198,27 @@ async function saveSettings() {
         !editing,
         session?.access_token
       )
+        // Notify waitlisted customers if product came back in stock
+      if (editing && (payload.in_stock === true || (payload.stock_quantity > 0))) {
+        const { data: waitlisted } = await supabase
+          .from('waitlist').select('id').eq('product_id', form.id).limit(1)
+        if (waitlisted?.length) {
+         
+          await fetch('/api/notify/waitlist-notify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`,
+            },
+            body: JSON.stringify({
+              product_id:    form.id,
+              product_name:  form.name,
+              product_price: form.price,
+              product_unit:  form.unit,
+            }),
+          })
+        }
+      }
       }
       resetForm(); loadAll()
     } catch(e) { showToast('Error: '+e.message) }

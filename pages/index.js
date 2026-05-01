@@ -635,8 +635,7 @@ const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PA
         )}
 
         <Footer />
-Push, open the PWA on phone, tap that button, log out, log back in — permission prompt should appear. Once push notifications are working, remove this button.
-      <Footer />
+
       <FloatingWhatsApp />
 
       {modalProduct && (

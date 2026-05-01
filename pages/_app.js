@@ -17,22 +17,7 @@ export default function App({ Component, pageProps }) {
     }).catch(err => console.error('SW failed:', err))
   }, [])
 
-  // ── Request Push Permission after login ──────────────────────────────────
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        await requestPushPermission(session.access_token)
-      }
-      if (event === 'SIGNED_OUT') {
-        try {
-          const reg = await navigator.serviceWorker.ready
-          const sub = await reg.pushManager.getSubscription()
-          if (sub) await sub.unsubscribe()
-        } catch {}
-      }
-    })
-    return () => subscription.unsubscribe()
-  }, [])
+ 
 
   // ── Install prompt (Android Chrome "Add to Home Screen") ─────────────────
   useEffect(() => {
@@ -73,9 +58,19 @@ export default function App({ Component, pageProps }) {
     events.forEach(e => window.addEventListener(e, startTimer))
     startTimer()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN')  startTimer()
-      if (event === 'SIGNED_OUT') clearTimeout(timer)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        startTimer()
+        await requestPushPermission(session.access_token)
+      }
+      if (event === 'SIGNED_OUT') {
+        clearTimeout(timer)
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.getSubscription()
+          if (sub) await sub.unsubscribe()
+        } catch {}
+      }
     })
 
     return () => {

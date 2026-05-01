@@ -610,7 +610,7 @@ const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PA
         )}
            {totalPages > 1 && (
           <div style={{ display:'flex', justifyContent:'center', marginTop:32 }}>
-            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+            <Pagination page={page} total={filtered.length} perPage={SHOP_PER_PAGE} onChange={setPage} />
           </div>
         )}
       </main>

@@ -308,7 +308,8 @@ const [settlements, setSettlements] = useState([])
                         <div style={{ flex:1 }}>
                           <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                             <span style={{ fontWeight:600, fontSize:14 }}>{p.name}</span>
-                            {p.is_visible===false && <span style={{ fontSize:10, background:'#eee', color:'#888', padding:'2px 7px', borderRadius:8, fontWeight:600 }}>Hidden</span>}
+                            {p.pending_approval && <span style={{ fontSize:10, background:'var(--gold-pale)', color:'var(--gold)', padding:'2px 7px', borderRadius:8, fontWeight:600 }}>⏳ Pending Approval</span>}
+{!p.pending_approval && p.is_visible===false && <span style={{ fontSize:10, background:'#eee', color:'#888', padding:'2px 7px', borderRadius:8, fontWeight:600 }}>Hidden</span>}
                             {!p.in_stock && <span style={{ fontSize:10, background:'var(--red-pale)', color:'var(--red)', padding:'2px 7px', borderRadius:8, fontWeight:600 }}>Out of stock</span>}
                             {sb && <span style={{ fontSize:10, background:sb.bg, color:sb.color, padding:'2px 7px', borderRadius:8, fontWeight:600 }}>{sb.label}</span>}
                           </div>

@@ -195,7 +195,7 @@ async function saveSettings() {
         const { data: { session } } = await supabase.auth.getSession()
       await notifyCustomersOfProduct(
         { ...payload, min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),emoji: form.emoji || '🌿', name: form.name },
-        !editing
+        !editing,
         session?.access_token
       )
       }

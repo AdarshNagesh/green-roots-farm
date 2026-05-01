@@ -58,7 +58,8 @@ const [ordersHasMore, setOrdersHasMore] = useState(false)
   const [prodPage, setProdPage]   = useState(1)
   const [orderPage, setOrderPage] = useState(1)
   const [custPage, setCustPage]   = useState(1)
-
+const [rejectModal, setRejectModal]   = useState(null)
+const [rejectReason, setRejectReason] = useState('')
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => {
       const u = session?.user ?? null
@@ -357,17 +358,36 @@ async function saveSettings() {
                               {p.pending_approval && (
                                 <div style={{display:'flex',gap:6}}>
                                   <button onClick={async()=>{
-                                    await supabase.from('products').update({is_visible:true,pending_approval:false}).eq('id',p.id)
-                                    showToast('✅ Product approved!'); loadAll()
-                                  }} style={{padding:'5px 12px',border:'none',borderRadius:7,background:'var(--green)',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>
-                                    ✓ Approve
-                                  </button>
-                                  <button onClick={async()=>{
-                                    await supabase.from('products').update({is_visible:false,pending_approval:false}).eq('id',p.id)
-                                    showToast('Product rejected.'); loadAll()
-                                  }} style={{padding:'5px 12px',border:'none',borderRadius:7,background:'var(--red-pale)',color:'var(--red)',cursor:'pointer',fontSize:12,fontWeight:600}}>
-                                    ✗ Reject
-                                  </button>
+  await supabase.from('products').update({is_visible:true,pending_approval:false}).eq('id',p.id)
+  // Notify farm owner
+  const { data: farm } = await supabase.from('farms').select('owner_id,email,name').eq('id',p.farm_id).single()
+  if (farm?.owner_id) {
+    await supabase.from('notifications').insert({
+      user_id: farm.owner_id,
+      message: `✅ Your product "${p.name}" has been approved and is now live on the shop!`,
+      type: 'admin',
+    })
+  }
+  // Email farm owner
+  const token = await getToken()
+  await fetch('/api/notify/product-decision', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({
+      decision: 'approved',
+      productName: p.name,
+      farmEmail: farm?.email,
+      farmName: farm?.name,
+    })
+  })
+  showToast('✅ Product approved!'); loadAll()
+}} style={{padding:'5px 12px',border:'none',borderRadius:7,background:'var(--green)',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>
+  ✓ Approve
+</button>
+                                 <button onClick={() => { setRejectModal(p); setRejectReason('') }}
+  style={{padding:'5px 12px',border:'none',borderRadius:7,background:'var(--red-pale)',color:'var(--red)',cursor:'pointer',fontSize:12,fontWeight:600}}>
+  ✗ Reject
+</button>
                                 </div>
                               )}
                             </div>
@@ -1010,6 +1030,74 @@ async function saveSettings() {
       )}
 
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        {rejectModal && (
+  <div className="overlay" onClick={e => e.target===e.currentTarget && setRejectModal(null)}>
+    <div className="modal" style={{maxWidth:420}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div style={{...serif,fontSize:20,fontWeight:700,color:'var(--red)'}}>✗ Reject Product</div>
+        <button onClick={()=>setRejectModal(null)}
+          style={{background:'none',border:'none',cursor:'pointer',fontSize:20,color:'var(--muted)'}}>✕</button>
+      </div>
+      <div style={{padding:'12px 14px',background:'var(--bg)',borderRadius:10,marginBottom:18}}>
+        <div style={{fontWeight:600,fontSize:14}}>{rejectModal.name}</div>
+        <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>₹{rejectModal.price}/{rejectModal.unit}</div>
+      </div>
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>Reason for rejection <span style={{color:'var(--muted)',fontWeight:400}}>(sent to farm owner)</span></div>
+        <textarea className="inp" rows={3} value={rejectReason}
+          onChange={e=>setRejectReason(e.target.value)}
+          placeholder="e.g. Please provide better product photos…"
+          style={{fontSize:13,lineHeight:1.6}} />
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:18}}>
+        {['Please provide better product photos','Price seems too high for this category','Description needs more detail','Product already exists in inventory'].map(r=>(
+          <button key={r} onClick={()=>setRejectReason(r)}
+            style={{fontSize:11,padding:'5px 11px',borderRadius:20,cursor:'pointer',fontWeight:500,
+              border:`1.5px solid ${rejectReason===r?'var(--red)':'var(--border)'}`,
+              background:rejectReason===r?'var(--red-pale)':'transparent',
+              color:rejectReason===r?'var(--red)':'var(--muted)'}}>
+            {r}
+          </button>
+        ))}
+      </div>
+      <div style={{display:'flex',gap:10}}>
+        <button onClick={()=>setRejectModal(null)} className="btn-o" style={{flex:1,padding:11}}>Cancel</button>
+        <button onClick={async()=>{
+          await supabase.from('products').update({is_visible:false,pending_approval:false}).eq('id',rejectModal.id)
+          // Notify farm owner
+          const { data: prod } = await supabase.from('products').select('farm_id').eq('id',rejectModal.id).single()
+          if (prod?.farm_id) {
+            const { data: farm } = await supabase.from('farms').select('owner_id,email,name').eq('id',prod.farm_id).single()
+            if (farm?.owner_id) {
+              await supabase.from('notifications').insert({
+                user_id: farm.owner_id,
+                message: `❌ Your product "${rejectModal.name}" was not approved. ${rejectReason ? 'Reason: ' + rejectReason : ''}`,
+                type: 'admin',
+              })
+            }
+            // Email farm owner
+            const token = await getToken()
+            await fetch('/api/notify/product-decision', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                decision: 'rejected',
+                productName: rejectModal.name,
+                reason: rejectReason,
+                farmEmail: farm?.email,
+                farmName: farm?.name,
+              })
+            })
+          }
+          showToast('Product rejected — farm owner notified.')
+          setRejectModal(null); setRejectReason(''); loadAll()
+        }} style={{flex:1,padding:11,background:'var(--red)',color:'#fff',border:'none',borderRadius:9,cursor:'pointer',fontSize:14,fontWeight:500}}>
+          Confirm Rejection
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </>
   )
 }

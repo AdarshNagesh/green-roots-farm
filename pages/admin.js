@@ -391,8 +391,21 @@ async function saveSettings() {
       type: 'admin',
     })
   }
-  // Email farm owner
+  // Push to farm owner
   const token = await getToken()
+  await fetch('/api/notify/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({
+      user_id: farm.owner_id,
+      title:   'Adarshini Farm 🌿',
+      body:    `✅ Your product "${p.name}" has been approved and is now live!`,
+      url:     '/farm-portal',
+      tag:     'product-approved-' + p.id,
+    }),
+  })                              
+  // Email farm owner
+ 
   await fetch('/api/notify/product-decision', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1098,8 +1111,23 @@ async function saveSettings() {
                 type: 'admin',
               })
             }
+             const token = await getToken()
+            // Push to farm owner
+            if (farm?.owner_id) {
+              await fetch('/api/notify/push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                  user_id: farm.owner_id,
+                  title:   'Adarshini Farm 🌿',
+                  body:    `❌ Your product "${rejectModal.name}" was not approved.${rejectReason ? ' Reason: ' + rejectReason : ''}`,
+                  url:     '/farm-portal',
+                  tag:     'product-rejected-' + rejectModal.id,
+                }),
+              })
+            }
             // Email farm owner
-            const token = await getToken()
+           
             await fetch('/api/notify/product-decision', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

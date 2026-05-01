@@ -1,19 +1,67 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import '../styles/globals.css'
 
-const IDLE_TIMEOUT = 30 * 60 * 1000 // 30 minutes — adjust as needed
+const IDLE_TIMEOUT = 30 * 60 * 1000 // 30 minutes
 
 export default function App({ Component, pageProps }) {
 
-  // ── Idle logout — only runs when a session exists ──────────────────────
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [showInstallBanner, setShowInstallBanner] = useState(false)
+
+  // ── Register Service Worker ──────────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      console.log('SW registered:', reg.scope)
+    }).catch(err => console.error('SW failed:', err))
+  }, [])
+
+  // ── Request Push Permission after login ──────────────────────────────────
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        await requestPushPermission(session.access_token)
+      }
+      if (event === 'SIGNED_OUT') {
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.getSubscription()
+          if (sub) await sub.unsubscribe()
+        } catch {}
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // ── Install prompt (Android Chrome "Add to Home Screen") ─────────────────
+  useEffect(() => {
+    function onBeforeInstall(e) {
+      e.preventDefault()
+      setInstallPrompt(e)
+      if (!window.matchMedia('(display-mode: standalone)').matches) {
+        setShowInstallBanner(true)
+      }
+    }
+    window.addEventListener('beforeinstallprompt', onBeforeInstall)
+    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall)
+  }, [])
+
+  async function handleInstall() {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') setShowInstallBanner(false)
+    setInstallPrompt(null)
+  }
+
+  // ── Idle logout ──────────────────────────────────────────────────────────
   useEffect(() => {
     let timer = null
 
     async function startTimer() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return  // no session = no timer needed
-
+      if (!session) return
       clearTimeout(timer)
       timer = setTimeout(async () => {
         await supabase.auth.signOut()
@@ -23,11 +71,10 @@ export default function App({ Component, pageProps }) {
 
     const events = ['mousemove', 'keypress', 'click', 'touchstart', 'scroll']
     events.forEach(e => window.addEventListener(e, startTimer))
-    startTimer()  // kick off on mount
+    startTimer()
 
-    // Restart timer whenever auth state changes (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') startTimer()
+      if (event === 'SIGNED_IN')  startTimer()
       if (event === 'SIGNED_OUT') clearTimeout(timer)
     })
 
@@ -38,13 +85,90 @@ export default function App({ Component, pageProps }) {
     }
   }, [])
 
-  // ── Prevent back button showing cached page after logout ───────────────
+  // ── Prevent back button showing cached page after logout ─────────────────
   useEffect(() => {
     window.history.pushState(null, '', window.location.href)
-    window.onpopstate = () => {
-      window.history.pushState(null, '', window.location.href)
-    }
+    window.onpopstate = () => window.history.pushState(null, '', window.location.href)
   }, [])
 
-  return <Component {...pageProps} />
+  return (
+    <>
+      <Component {...pageProps} />
+
+      {/* Install App Banner */}
+      {showInstallBanner && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
+          background: '#fff', borderTop: '1px solid #d8cfbc',
+          padding: '14px 20px', display: 'flex', alignItems: 'center',
+          gap: 12, boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
+        }}>
+          <span style={{ fontSize: 28 }}>🌿</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, color: '#1e2d1c' }}>
+              Install Adarshini Farm
+            </div>
+            <div style={{ fontSize: 12, color: '#687165' }}>
+              Get order updates even when app is closed
+            </div>
+          </div>
+          <button onClick={handleInstall}
+            style={{
+              background: '#2d6a27', color: '#fff', border: 'none',
+              borderRadius: 8, padding: '8px 16px', fontSize: 13,
+              fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>
+            Install
+          </button>
+          <button onClick={() => setShowInstallBanner(false)}
+            style={{
+              background: 'transparent', border: 'none', fontSize: 18,
+              cursor: 'pointer', color: '#687165', padding: '4px 8px',
+            }}>
+            ✕
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
+
+async function requestPushPermission(accessToken) {
+  try {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return
+    if (Notification.permission === 'denied') return
+
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return
+
+    const reg = await navigator.serviceWorker.ready
+    const existing = await reg.pushManager.getSubscription()
+    if (existing) { await saveSubscription(existing, accessToken); return }
+
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    if (!vapidKey) return
+
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    })
+    await saveSubscription(subscription, accessToken)
+  } catch (err) { console.error('Push permission error:', err) }
+}
+
+async function saveSubscription(subscription, accessToken) {
+  try {
+    await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ subscription }),
+    })
+  } catch {}
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4)
+  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw     = window.atob(base64)
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
 }

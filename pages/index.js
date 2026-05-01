@@ -494,6 +494,12 @@ const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PA
         <title>Adarshini Organic Farm — Fresh Produce</title>
         <meta name="description" content="Fresh organic produce from Adarshini farm — direct to your table." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#2d6a27" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Adarshini Farm" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </Head>
 
       <Header user={user} cartCount={cartCount} onCartOpen={() => setShowCart(true)}

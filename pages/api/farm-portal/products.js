@@ -21,10 +21,24 @@ export default async function handler(req, res) {
   const farmId = profile.owned_farm_id
 
   // 3. Handle methods
-  if (req.method === 'POST') {
-    const payload = { ...req.body, farm_id: farmId }
+if (req.method === 'POST') {
+    const payload = {
+      ...req.body,
+      farm_id:          farmId,
+      is_visible:       false,      // hidden until admin approves
+      pending_approval: true,
+    }
     const { data, error } = await admin.from('products').insert(payload).select().single()
     if (error) return res.status(500).json({ error: error.message })
+
+    // Notify admin via in-app notification
+    const { data: farm } = await admin.from('farms').select('name').eq('id', farmId).single()
+    await admin.from('notifications').insert({
+      user_id: (await admin.from('profiles').select('id').eq('role', 'admin').single()).data?.id,
+      message: `🌿 New product "${payload.name}" submitted by ${farm?.name || 'a farm'} — pending your approval.`,
+      type: 'admin',
+    }).catch(() => {})
+
     return res.status(200).json(data)
   }
 
@@ -32,6 +46,9 @@ export default async function handler(req, res) {
     const { id, ...payload } = req.body
     const { data: existing } = await admin.from('products').select('farm_id').eq('id', id).single()
     if (existing?.farm_id !== farmId) return res.status(403).json({ error: 'Not your product' })
+    // Farm owners cannot make products visible directly
+    delete payload.is_visible
+    delete payload.pending_approval
     const { error } = await admin.from('products').update(payload).eq('id', id)
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json({ success: true })

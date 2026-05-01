@@ -620,19 +620,7 @@ const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PA
           </div>
         )}
       </main>
-{/* TEMP: Push reset button - remove after testing */}
-        {user && (
-          <div style={{ textAlign:'center', padding:'10px' }}>
-            <button onClick={async () => {
-              const reg = await navigator.serviceWorker.ready
-              const sub = await reg.pushManager.getSubscription()
-              if (sub) await sub.unsubscribe()
-              alert('Done. Now log out and log back in.')
-            }} style={{ fontSize:11, color:'var(--muted)', background:'none', border:'none', cursor:'pointer' }}>
-              Reset Push Subscription
-            </button>
-          </div>
-        )}
+
 
         <Footer />
 

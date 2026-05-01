@@ -23,7 +23,14 @@ export default async function handler(req, res) {
     authorized = true
   } else if (token) {
     const { data: { user } } = await admin.auth.getUser(token)
-    if (user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) authorized = true
+    if (user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+      authorized = true
+    } else if (user) {
+      // Also allow farm owners
+      const { data: farm } = await admin.from('farms')
+        .select('id').eq('owner_id', user.id).single()
+      if (farm) authorized = true
+    }
   }
   if (!authorized) {
     console.log('PUSH: unauthorized')

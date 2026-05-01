@@ -110,9 +110,40 @@ farms.forEach(f => {
       subject: `New Order Rs.${Number(order.total).toFixed(0)} from ${order.customer_name}${farmName ? ` — ${farmName}` : ''}`,
       html,
     })
-    res.status(200).json({ success: true })
+ 
+
+   
+    
   } catch (err) {
     console.error('Admin notify error:', err)
     res.status(200).json({ success: false })
+    return
   }
+     // Push notification to admin
+  try {
+    const { data: adminSub } = await adminClient
+      .from('push_subscriptions')
+      .select('user_id')
+      .eq('user_id', (await adminClient.from('profiles')
+        .select('id').eq('role', 'admin').single()).data?.id)
+      .single()
+
+    if (adminSub) {
+      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://adarshini.co.in'}/api/notify/push`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': process.env.INTERNAL_API_SECRET,
+        },
+        body: JSON.stringify({
+          user_id: adminSub.user_id,
+          title:   '🛒 New Order!',
+          body:    `${order.customer_name} placed an order for ₹${Number(order.total).toFixed(0)}`,
+          url:     '/admin',
+          tag:     'new-order-' + order.id,
+        }),
+      })
+    }
+  } catch (e) { console.error('Admin push error:', e) }
+  res.status(200).json({ success: true })
 }

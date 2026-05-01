@@ -311,7 +311,7 @@ async function saveSettings() {
         <div style={{display:'flex',borderBottom:'2px solid var(--border)',marginBottom:24}}>
       {['products','orders','customers','farms','settlements','settings'].map(t=>(
   <button key={t} className={`tab-btn ${tab===t?'active':''}`} onClick={()=>setTab(t)}>
-    {t==='products'?'🌿 Products':t==='orders'?'📦 Orders':t==='customers'?'👥 Customers':t==='farms'?'🚜 Farms':t==='settlements'?'💰 Settlements':'⚙️ Settings'}
+    {t==='products'?<>🌿 Products {products.filter(p=>p.pending_approval).length > 0 && <span style={{background:'var(--gold)',color:'#fff',fontSize:10,padding:'1px 6px',borderRadius:8,marginLeft:4}}>{products.filter(p=>p.pending_approval).length}</span>}</> :t==='orders'?'📦 Orders':t==='customers'?'👥 Customers':t==='farms'?'🚜 Farms':t==='settlements'?'💰 Settlements':'⚙️ Settings'}
   </button>
 ))}
         </div>
@@ -339,7 +339,8 @@ async function saveSettings() {
                             <div style={{flex:1}}>
                               <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                                 <span style={{fontWeight:600,fontSize:14}}>{p.name}</span>
-                                {p.is_visible===false && <span style={{fontSize:10,background:'#eeeeee',color:'#888',padding:'2px 7px',borderRadius:8,fontWeight:600}}>Hidden</span>}
+                                {p.pending_approval && <span style={{fontSize:10,background:'var(--gold-pale)',color:'var(--gold)',padding:'2px 7px',borderRadius:8,fontWeight:600}}>⏳ Pending Approval</span>}
+{!p.pending_approval && p.is_visible===false && <span style={{fontSize:10,background:'#eeeeee',color:'#888',padding:'2px 7px',borderRadius:8,fontWeight:600}}>Hidden</span>}
                                 {!p.in_stock&&<span style={{fontSize:10,background:'var(--red-pale)',color:'var(--red)',padding:'2px 7px',borderRadius:8,fontWeight:600}}>Out of stock</span>}
                                 {sb&&<span style={{fontSize:10,background:sb.bg,color:sb.color,padding:'2px 7px',borderRadius:8,fontWeight:600}}>{sb.label}</span>}
                                 {p.quantity_options?.length>0&&<span style={{fontSize:10,background:'var(--gold-pale)',color:'var(--gold)',padding:'2px 7px',borderRadius:8,fontWeight:600}}>{p.quantity_options.length} size options</span>}
@@ -348,9 +349,27 @@ async function saveSettings() {
                                 {p.category} · <span style={{color:'var(--green)',fontWeight:600}}>₹{p.price}</span>/{p.unit}
                               </div>
                             </div>
-                            <div style={{display:'flex',gap:6}}>
-                              <button onClick={()=>startEdit(p)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12}}>Edit</button>
-                              <button onClick={()=>deleteProduct(p.id,p.image_url)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12,color:'var(--red)'}}>Delete</button>
+                            <div style={{display:'flex',flexDirection:'column',gap:6,alignItems:'flex-end'}}>
+                              <div style={{display:'flex',gap:6}}>
+                                <button onClick={()=>startEdit(p)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12}}>Edit</button>
+                                <button onClick={()=>deleteProduct(p.id,p.image_url)} style={{padding:'5px 12px',border:'1px solid var(--border)',borderRadius:7,background:'transparent',cursor:'pointer',fontSize:12,color:'var(--red)'}}>Delete</button>
+                              </div>
+                              {p.pending_approval && (
+                                <div style={{display:'flex',gap:6}}>
+                                  <button onClick={async()=>{
+                                    await supabase.from('products').update({is_visible:true,pending_approval:false}).eq('id',p.id)
+                                    showToast('✅ Product approved!'); loadAll()
+                                  }} style={{padding:'5px 12px',border:'none',borderRadius:7,background:'var(--green)',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>
+                                    ✓ Approve
+                                  </button>
+                                  <button onClick={async()=>{
+                                    await supabase.from('products').update({is_visible:false,pending_approval:false}).eq('id',p.id)
+                                    showToast('Product rejected.'); loadAll()
+                                  }} style={{padding:'5px 12px',border:'none',borderRadius:7,background:'var(--red-pale)',color:'var(--red)',cursor:'pointer',fontSize:12,fontWeight:600}}>
+                                    ✗ Reject
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )

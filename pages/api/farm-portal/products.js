@@ -6,13 +6,11 @@ const admin = createClient(
 )
 
 export default async function handler(req, res) {
-  // 1. Verify token
   const token = req.headers.authorization?.replace('Bearer ', '')
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
   const { data: { user }, error: authErr } = await admin.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' })
 
-  // 2. Verify farm owner role
   const { data: profile } = await admin.from('profiles')
     .select('role, owned_farm_id').eq('id', user.id).single()
   if (profile?.role !== 'farm_owner' || !profile.owned_farm_id)
@@ -20,7 +18,6 @@ export default async function handler(req, res) {
 
   const farmId = profile.owned_farm_id
 
-  // 3. Handle methods
   if (req.method === 'POST') {
     const payload = {
       ...req.body,
@@ -31,16 +28,17 @@ export default async function handler(req, res) {
     const { data, error } = await admin.from('products').insert(payload).select().single()
     if (error) return res.status(500).json({ error: error.message })
 
-    // Notify admin via in-app notification
-    const { data: farm } = await admin.from('farms').select('name').eq('id', farmId).single()
-    const { data: adminProfile } = await admin.from('profiles').select('id').eq('role', 'admin').single()
-    if (adminProfile?.id) {
-      await admin.from('notifications').insert({
-        user_id: adminProfile.id,
-        message: `🌿 New product "${payload.name}" submitted by ${farm?.name || 'a farm'} — pending your approval.`,
-        type: 'admin',
-      }).catch(() => {})
-    }
+    try {
+      const { data: farm } = await admin.from('farms').select('name').eq('id', farmId).single()
+      const { data: adminProfile } = await admin.from('profiles').select('id').eq('role', 'admin').single()
+      if (adminProfile?.id) {
+        await admin.from('notifications').insert({
+          user_id: adminProfile.id,
+          message: `New product "${payload.name}" submitted by ${farm?.name || 'a farm'} — pending your approval.`,
+          type: 'admin',
+        })
+      }
+    } catch(e) { console.error('Admin notify failed:', e) }
 
     return res.status(200).json(data)
   }
@@ -49,11 +47,8 @@ export default async function handler(req, res) {
     const { id, ...payload } = req.body
     const { data: existing } = await admin.from('products').select('farm_id').eq('id', id).single()
     if (existing?.farm_id !== farmId) return res.status(403).json({ error: 'Not your product' })
-
-    // Farm owners cannot make products visible directly
     delete payload.is_visible
     delete payload.pending_approval
-
     const { error } = await admin.from('products').update(payload).eq('id', id)
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json({ success: true })
@@ -63,14 +58,12 @@ export default async function handler(req, res) {
     const { id } = req.body
     const { data: existing } = await admin.from('products').select('farm_id').eq('id', id).single()
     if (existing?.farm_id !== farmId) return res.status(403).json({ error: 'Not your product' })
-
     const { data: orders } = await admin.from('orders')
       .select('id, items').eq('farm_id', farmId).neq('status', 'Cancelled')
     const hasActiveOrder = (orders || []).some(o =>
       (o.items || []).some(item => item.id === id)
     )
     if (hasActiveOrder) return res.status(400).json({ error: 'Cannot delete — product has active orders. Mark as hidden instead.' })
-
     await admin.from('products').delete().eq('id', id)
     return res.status(200).json({ success: true })
   }

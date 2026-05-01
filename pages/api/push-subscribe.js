@@ -12,18 +12,24 @@ export default async function handler(req, res) {
   const { data: { user }, error } = await admin.auth.getUser(token)
   if (error || !user) return res.status(401).json({ error: 'Unauthorized' })
 
+  // GET — list all subscribed user_ids (admin only)
+  if (req.method === 'GET') {
+    if (user.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL)
+      return res.status(401).json({ error: 'Unauthorized' })
+    const { data } = await admin.from('push_subscriptions').select('user_id')
+    return res.status(200).json({ data: data || [] })
+  }
+
   // POST — save subscription
   if (req.method === 'POST') {
     const { subscription } = req.body
     if (!subscription) return res.status(400).json({ error: 'Missing subscription' })
-
     const { error: upsertErr } = await admin.from('push_subscriptions').upsert({
       user_id:      user.id,
       endpoint:     subscription.endpoint,
       subscription: subscription,
       updated_at:   new Date().toISOString(),
     }, { onConflict: 'user_id' })
-
     if (upsertErr) return res.status(500).json({ error: upsertErr.message })
     return res.status(200).json({ ok: true })
   }

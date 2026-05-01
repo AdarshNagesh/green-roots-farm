@@ -20,7 +20,9 @@ export default async function handler(req, res) {
   // Verify order belongs to this user
   const { data: dbOrder } = await admin.from('orders')
     .select('user_id').eq('id', order.id).single()
-  if (!dbOrder || dbOrder.user_id !== user.id) return res.status(403).json({ error: 'Forbidden' })
+  const isAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL
+if (!dbOrder || (!isAdmin && dbOrder.user_id !== user.id)) 
+  return res.status(403).json({ error: 'Forbidden' })
 
   // Now call internal notify APIs — these run server-side so INTERNAL_API_SECRET is safe
   const secret = process.env.INTERNAL_API_SECRET

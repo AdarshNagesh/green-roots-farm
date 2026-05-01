@@ -479,7 +479,7 @@ const farmChannel = supabase.channel('farms_live')
   const cartCount = cart.reduce((s,i) => s+i.qty, 0)
  const activeFarmIds = new Set(farms.map(f => f.id))
 const filtered = products.filter(p=>
-  (p.farm_id === null || activeFarmIds.has(p.farm_id)) &&
+  (farms.length === 0 || p.farm_id === null || activeFarmIds.has(p.farm_id)) &&
   (filter==='All'||p.category===filter) &&
   (farmFilter==='All'||p.farm_id===farmFilter) &&
   p.name.toLowerCase().includes(search.toLowerCase())

@@ -6,10 +6,23 @@ export default async function handler(req, res) {
   if (req.method !== 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
 
-    // Internal secret check
+  // Accept internal secret OR admin Bearer token
   const secret = process.env.INTERNAL_API_SECRET
-  if (secret && req.headers['x-internal-secret'] !== secret)
-    return res.status(401).json({ error: 'Unauthorized' })
+  const token  = req.headers.authorization?.replace('Bearer ', '')
+
+  let authorized = false
+  if (secret && req.headers['x-internal-secret'] === secret) {
+    authorized = true
+  } else if (token) {
+    const { createClient } = await import('@supabase/supabase-js')
+    const adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+    const { data: { user } } = await adminClient.auth.getUser(token)
+    if (user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) authorized = true
+  }
+  if (!authorized) return res.status(401).json({ error: 'Unauthorized' })
 
   const { type, order, product } = req.body
 

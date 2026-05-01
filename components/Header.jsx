@@ -10,10 +10,10 @@ export default function Header({ user, cartCount, onCartOpen, onAuthOpen, notifs
   const unread  = notifs.filter(n => !n.read).length
   const [showNotif, setShowNotif] = useState(false)
 
-  async function logout() {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
+ async function logout() {
+  await supabase.auth.signOut()
+  window.location.href = '/'   // full reload, forces clean slate
+}
 
   async function toggleNotif() {
     setShowNotif(v => !v)

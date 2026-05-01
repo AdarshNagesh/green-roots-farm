@@ -142,7 +142,7 @@ const [settlements, setSettlements] = useState([])
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
-    showToast(editing ? '✅ Product updated!' : '✅ Product added!')
+    showToast(editing ? '✅ Product updated!' : '✅ Product submitted for approval!')
     resetForm(); loadProducts(farm.id)
   } catch (e) { showToast('Error: ' + e.message) }
   finally { setSaving(false); setUploading(false) }

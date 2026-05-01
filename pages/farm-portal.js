@@ -124,7 +124,7 @@ const [settlements, setSettlements] = useState([])
     const payload = {
       name: form.name, description: form.description, price: parseFloat(form.price),
       unit: form.unit, category: form.category, image_url: imageUrl,
-      in_stock: form.in_stock, is_visible: form.is_visible !== false,
+      in_stock: form.in_stock,
       quantity_options: qty_opts.length > 0 ? qty_opts : null,
       stock_quantity: stockQty,
       min_order_value: form.min_order_value === '' ? null : parseFloat(form.min_order_value),

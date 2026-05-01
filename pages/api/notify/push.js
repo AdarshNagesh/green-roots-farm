@@ -16,9 +16,17 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   // Internal calls only
-  const secret = req.headers['x-internal-secret']
-  if (!secret || secret !== process.env.INTERNAL_API_SECRET)
-    return res.status(401).json({ error: 'Unauthorized' })
+ const secret = req.headers['x-internal-secret']
+const token  = req.headers.authorization?.replace('Bearer ', '')
+
+let authorized = false
+if (secret && secret === process.env.INTERNAL_API_SECRET) {
+  authorized = true
+} else if (token) {
+  const { data: { user } } = await admin.auth.getUser(token)
+  if (user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) authorized = true
+}
+if (!authorized) return res.status(401).json({ error: 'Unauthorized' })
 
   const { user_id, title, body, url, tag } = req.body
   if (!user_id || !title || !body) return res.status(400).json({ error: 'Missing fields' })

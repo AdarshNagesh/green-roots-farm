@@ -38,6 +38,36 @@ export default async function handler(req, res) {
           type: 'admin',
         })
       }
+
+      // Email to admin
+      const adminEmail = process.env.ADMIN_EMAIL
+      if (adminEmail) {
+        const { Resend } = await import('resend')
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        await resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+          to:   adminEmail,
+          subject: `🌿 New product pending approval — ${payload.name}`,
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#f5f0e6;padding:32px">
+              <div style="background:#fff;border-radius:16px;padding:28px">
+                <div style="font-size:24px;font-weight:700;color:#2d6a27;margin-bottom:8px">🌿 New Product Submitted</div>
+                <p style="color:#687165;font-size:14px">A new product has been submitted for your approval.</p>
+                <div style="background:#f5f0e6;border-radius:10px;padding:16px;margin:16px 0">
+                  <div style="font-weight:700;font-size:16px;color:#1e2d1c">${payload.name}</div>
+                  <div style="color:#687165;font-size:13px;margin-top:4px">Farm: ${farm?.name || 'Unknown'}</div>
+                  <div style="color:#2d6a27;font-weight:600;font-size:15px;margin-top:4px">₹${payload.price} / ${payload.unit}</div>
+                  ${payload.description ? `<div style="color:#687165;font-size:13px;margin-top:6px">${payload.description}</div>` : ''}
+                </div>
+                <a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin" 
+                  style="display:block;background:#2d6a27;color:#fff;text-align:center;padding:12px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600">
+                  Review in Admin Panel →
+                </a>
+              </div>
+            </div>
+          `,
+        })
+      }
     } catch(e) { console.error('Admin notify failed:', e) }
 
     return res.status(200).json(data)

@@ -143,6 +143,15 @@ const [settlements, setSettlements] = useState([])
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
     showToast(editing ? '✅ Product updated!' : '✅ Product submitted for approval!')
+     // Notify customers via push if product updated (not new — new goes through approval)
+    if (editing) {
+      const { notifyCustomersOfProduct } = await import('../lib/productNotify')
+      await notifyCustomersOfProduct(
+        { ...payload, id: form.id, name: form.name },
+        false,
+        token
+      )
+    }
     resetForm(); loadProducts(farm.id)
   } catch (e) { showToast('Error: ' + e.message) }
   finally { setSaving(false); setUploading(false) }

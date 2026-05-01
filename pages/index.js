@@ -6,10 +6,11 @@ import AuthModal               from '../components/AuthModal'
 import CartSidebar             from '../components/CartSidebar'
 import { Footer, FloatingWhatsApp } from '../components/Footer'
 import { useRouter } from 'next/router'
-
+import Pagination from '../components/Pagination'
 const serif      = { fontFamily: 'Playfair Display, serif' }
 const CATEGORIES = ['Vegetables','Fruits','Herbs','Grains','Dairy','Others']
 const LOW_STOCK  = 5
+const SHOP_PER_PAGE = 12
 
 
 // ── Notify Me Button ──────────────────────────────────────────────────────────
@@ -335,6 +336,7 @@ useEffect(() => {
   const [notifs, setNotifs]             = useState([])
   const [filter, setFilter]             = useState('All')
   const [search, setSearch]             = useState('')
+  const [page, setPage]         = useState(1)
   const [showAuth, setShowAuth]         = useState(false)
   const [showCart, setShowCart]         = useState(false)
   const [modalProduct, setModalProduct] = useState(null)
@@ -412,7 +414,7 @@ const farmChannel = supabase.channel('farms_live')
   }
 }, [])
 
-    
+    useEffect(() => { setPage(1) }, [filter, farmFilter, search])
 
   async function fetchProducts() {
     setLoading(true)
@@ -482,6 +484,9 @@ const filtered = products.filter(p=>
   (farmFilter==='All'||p.farm_id===farmFilter) &&
   p.name.toLowerCase().includes(search.toLowerCase())
 )
+
+const totalPages = Math.ceil(filtered.length / SHOP_PER_PAGE)
+const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PAGE)
 
   return (
     <>
@@ -594,13 +599,18 @@ const filtered = products.filter(p=>
           </div>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:18 }}>
-            {filtered.map(p => (
+            {paginated.map(p => (
               <ProductCard key={p.id} product={p}
                 user={user}
                 onAddToCart={addToCart}
                 onViewDetail={setModalProduct}
                 onAuthOpen={() => setShowAuth(true)} />
             ))}
+          </div>
+        )}
+           {totalPages > 1 && (
+          <div style={{ display:'flex', justifyContent:'center', marginTop:32 }}>
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </div>
         )}
       </main>

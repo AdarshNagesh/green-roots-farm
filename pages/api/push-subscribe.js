@@ -12,10 +12,15 @@ export default async function handler(req, res) {
   const { data: { user }, error } = await admin.auth.getUser(token)
   if (error || !user) return res.status(401).json({ error: 'Unauthorized' })
 
-  // GET — list all subscribed user_ids (admin only)
+  // GET — list all subscribed user_ids (admin or farm owner)
   if (req.method === 'GET') {
-    if (user.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL)
-      return res.status(401).json({ error: 'Unauthorized' })
+    const isAdminUser = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL
+    if (!isAdminUser) {
+      const { data: profile } = await admin.from('profiles')
+        .select('role').eq('id', user.id).single()
+      if (profile?.role !== 'farm_owner')
+        return res.status(401).json({ error: 'Unauthorized' })
+    }
     const { data } = await admin.from('push_subscriptions').select('user_id')
     return res.status(200).json({ data: data || [] })
   }

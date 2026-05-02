@@ -447,6 +447,34 @@ const farmChannel = supabase.channel('farms_live')
 
     useEffect(() => { setPage(1) }, [filter, farmFilter, search])
 
+  // Refetch when PWA resumes from background
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') {
+        fetchProducts()
+        fetch('/api/admin/farms?active=true')
+          .then(r => r.json()).then(d => setFarms(d||[])).catch(()=>{})
+        fetch('/api/ratings').then(r=>r.json()).then(data => {
+          const map = {}
+          ;(data||[]).forEach(r => {
+            const key = `${r.product_id}_${r.farm_id || 'none'}`
+            map[key] = r
+          })
+          setRatings(map)
+        }).catch(()=>{})
+      }
+    }
+    function onPageShow(e) {
+      if (e.persisted) fetchProducts()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onPageShow)
+    }
+  }, [])
+
  async function fetchProducts() {
   setLoading(true)
   try {

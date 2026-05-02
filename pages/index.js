@@ -387,15 +387,17 @@ const router = useRouter()
   if (!u) {
     setCart([])
     try { localStorage.removeItem('adarshini_cart') } catch {}
+    return
   }
-   if (u && router.query.portal !== '1') {
-      const { data: profile } = await supabase.from('profiles')
-        .select('role').eq('id', u.id).single()
-      if (profile?.role === 'farm_owner') {
-        router.replace('/farm-portal'); return
-      }
+  // Only redirect on fresh sign in, not on every navigation
+  if (_e === 'SIGNED_IN' && router.query.portal !== '1') {
+    const { data: profile } = await supabase.from('profiles')
+      .select('role').eq('id', u.id).single()
+    if (profile?.role === 'farm_owner') {
+      router.replace('/farm-portal'); return
     }
-  })
+  }
+})
 
   fetchProducts()
   fetch('/api/admin/farms?active=true').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
@@ -445,11 +447,19 @@ const farmChannel = supabase.channel('farms_live')
 
     useEffect(() => { setPage(1) }, [filter, farmFilter, search])
 
-  async function fetchProducts() {
-    setLoading(true)
-    const { data } = await supabase.from('products').select('*').order('created_at', { ascending:false })
-    setProducts(data||[]); setLoading(false)
+ async function fetchProducts() {
+  setLoading(true)
+  try {
+    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending:false })
+    if (error) throw error
+    setProducts(data || [])
+  } catch(e) {
+    console.error('fetchProducts error:', e)
+    setProducts([])
+  } finally {
+    setLoading(false)
   }
+}
 
   async function fetchNotifs(userId) {
     const { data } = await supabase.from('notifications').select('*')

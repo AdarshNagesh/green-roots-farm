@@ -96,12 +96,6 @@ export default function App({ Component, pageProps }) {
     }
   }, [])
 
-  // ── Prevent back button showing cached page after logout ─────────────────
-  useEffect(() => {
-    window.history.pushState(null, '', window.location.href)
-    window.onpopstate = () => window.history.pushState(null, '', window.location.href)
-  }, [])
-
   return (
     <>
       <Component {...pageProps} />

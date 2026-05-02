@@ -400,10 +400,13 @@ const router = useRouter()
   fetchProducts()
   fetch('/api/admin/farms?active=true').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
   fetch('/api/ratings').then(r=>r.json()).then(data => {
-    const map = {}
-    ;(data||[]).forEach(r => { map[r.product_id] = r })
-    setRatings(map)
-  }).catch(()=>{})
+  const map = {}
+  ;(data||[]).forEach(r => {
+    const key = `${r.product_id}_${r.farm_id || 'none'}`
+    map[key] = r
+  })
+  setRatings(map)
+}).catch(()=>{})
   return () => subscription.unsubscribe()
 }, [])
 
@@ -634,7 +637,7 @@ const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PA
             {paginated.map(p => (
               <ProductCard key={p.id} product={p}
                 user={user}
-                rating={ratings[p.id]}
+                rating={ratings[`${p.id}_${p.farm_id || 'none'}`]}
                 onAddToCart={addToCart}
                 onViewDetail={setModalProduct}
                 onAuthOpen={() => setShowAuth(true)} />

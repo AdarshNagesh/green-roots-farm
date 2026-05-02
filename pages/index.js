@@ -189,7 +189,7 @@ function ProductModal({ product, onClose, onAddToCart, user, onAuthOpen }) {
 }
 
 // ── Product Card ──────────────────────────────────────────────────────────────
-function ProductCard({ product, user, onAddToCart, onViewDetail, onAuthOpen }) {
+function ProductCard({ product, user, onAddToCart, onViewDetail, onAuthOpen, rating }) {
   const opts        = product.quantity_options || []
   const [selectedIdx, setSelectedIdx] = useState(0)
 
@@ -260,6 +260,26 @@ function ProductCard({ product, user, onAddToCart, onViewDetail, onAuthOpen }) {
                   fontSize:12, fontWeight:600, padding:0, marginLeft:3 }}>
                 Read more
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Ratings */}
+        {rating && (rating.delivery_avg || rating.quality_avg) && (
+          <div style={{ display:'flex', gap:10, marginBottom:8, flexWrap:'wrap' }}>
+            {rating.delivery_avg && (
+              <div style={{ display:'flex', alignItems:'center', gap:3, fontSize:11, color:'var(--muted)' }}>
+                <span style={{ color:'#f5a623' }}>{'★'.repeat(Math.round(rating.delivery_avg))}{'☆'.repeat(5-Math.round(rating.delivery_avg))}</span>
+                <span>{rating.delivery_avg} 🚚</span>
+                <span style={{ color:'var(--border)' }}>({rating.delivery_count})</span>
+              </div>
+            )}
+            {rating.quality_avg && (
+              <div style={{ display:'flex', alignItems:'center', gap:3, fontSize:11, color:'var(--muted)' }}>
+                <span style={{ color:'#f5a623' }}>{'★'.repeat(Math.round(rating.quality_avg))}{'☆'.repeat(5-Math.round(rating.quality_avg))}</span>
+                <span>{rating.quality_avg} 🌿</span>
+                <span style={{ color:'var(--border)' }}>({rating.quality_count})</span>
+              </div>
             )}
           </div>
         )}
@@ -344,6 +364,7 @@ useEffect(() => {
   const [loading, setLoading]           = useState(true)
   const [farms, setFarms]       = useState([])
 const [farmFilter, setFarmFilter] = useState('All')
+const [ratings, setRatings]   = useState({}) // { productId: { delivery_avg, quality_avg } }
 const router = useRouter()
   const [isFarmOwner, setIsFarmOwner] = useState(false)
  useEffect(() => {
@@ -378,6 +399,11 @@ const router = useRouter()
 
   fetchProducts()
   fetch('/api/admin/farms?active=true').then(r=>r.json()).then(d=>setFarms(d||[])).catch(()=>{})
+  fetch('/api/ratings').then(r=>r.json()).then(data => {
+    const map = {}
+    ;(data||[]).forEach(r => { map[r.product_id] = r })
+    setRatings(map)
+  }).catch(()=>{})
   return () => subscription.unsubscribe()
 }, [])
 
@@ -608,6 +634,7 @@ const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PA
             {paginated.map(p => (
               <ProductCard key={p.id} product={p}
                 user={user}
+                rating={ratings[p.id]}
                 onAddToCart={addToCart}
                 onViewDetail={setModalProduct}
                 onAuthOpen={() => setShowAuth(true)} />
@@ -621,9 +648,7 @@ const paginated  = filtered.slice((page - 1) * SHOP_PER_PAGE, page * SHOP_PER_PA
         )}
       </main>
 
-
-        <Footer />
-
+      <Footer />
       <FloatingWhatsApp />
 
       {modalProduct && (

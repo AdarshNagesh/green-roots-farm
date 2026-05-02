@@ -8,6 +8,7 @@ export default function App({ Component, pageProps }) {
 
   const [installPrompt, setInstallPrompt] = useState(null)
   const [showInstallBanner, setShowInstallBanner] = useState(false)
+  const [showIOSBanner, setShowIOSBanner] = useState(false)
 
   // ── Register Service Worker ──────────────────────────────────────────────
   useEffect(() => {
@@ -17,7 +18,22 @@ export default function App({ Component, pageProps }) {
     }).catch(err => console.error('SW failed:', err))
   }, [])
 
- 
+  // ── Request Push Permission after login ──────────────────────────────────
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        await requestPushPermission(session.access_token)
+      }
+      if (event === 'SIGNED_OUT') {
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.getSubscription()
+          if (sub) await sub.unsubscribe()
+        } catch {}
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   // ── Install prompt (Android Chrome "Add to Home Screen") ─────────────────
   useEffect(() => {
@@ -30,6 +46,16 @@ export default function App({ Component, pageProps }) {
     }
     window.addEventListener('beforeinstallprompt', onBeforeInstall)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall)
+  }, [])
+
+  // ── iOS install prompt (Safari doesn't fire beforeinstallprompt) ──────────
+  useEffect(() => {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    const dismissed = sessionStorage.getItem('ios_banner_dismissed')
+    if (isIOS && !isStandalone && !dismissed) {
+      setTimeout(() => setShowIOSBanner(true), 3000) // show after 3s
+    }
   }, [])
 
   async function handleInstall() {
@@ -58,19 +84,9 @@ export default function App({ Component, pageProps }) {
     events.forEach(e => window.addEventListener(e, startTimer))
     startTimer()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        startTimer()
-        await requestPushPermission(session.access_token)
-      }
-      if (event === 'SIGNED_OUT') {
-        clearTimeout(timer)
-        try {
-          const reg = await navigator.serviceWorker.ready
-          const sub = await reg.pushManager.getSubscription()
-          if (sub) await sub.unsubscribe()
-        } catch {}
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN')  startTimer()
+      if (event === 'SIGNED_OUT') clearTimeout(timer)
     })
 
     return () => {
@@ -90,7 +106,7 @@ export default function App({ Component, pageProps }) {
     <>
       <Component {...pageProps} />
 
-      {/* Install App Banner */}
+      {/* Android Install Banner */}
       {showInstallBanner && (
         <div style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
@@ -122,6 +138,53 @@ export default function App({ Component, pageProps }) {
             }}>
             ✕
           </button>
+        </div>
+      )}
+
+      {/* iOS Install Instructions Banner */}
+      {showIOSBanner && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
+          background: '#fff', borderTop: '2px solid #2d6a27',
+          padding: '16px 20px', boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
+        }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom: 10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap: 8 }}>
+              <span style={{ fontSize: 24 }}>🌿</span>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#1e2d1c' }}>
+                Install Adarshini Farm
+              </div>
+            </div>
+            <button onClick={() => {
+              setShowIOSBanner(false)
+              sessionStorage.setItem('ios_banner_dismissed', '1')
+            }} style={{
+              background: 'transparent', border: 'none', fontSize: 18,
+              cursor: 'pointer', color: '#687165', padding: '0 4px',
+            }}>✕</button>
+          </div>
+          <div style={{ fontSize: 13, color: '#687165', lineHeight: 1.8 }}>
+            Add this app to your home screen for quick access and order notifications:
+          </div>
+          <div style={{ display:'flex', gap: 8, marginTop: 10, flexWrap:'wrap' }}>
+            {[
+              { step: '1', text: 'Tap the Share button', icon: '⬆️' },
+              { step: '2', text: 'Scroll down & tap', icon: '📲' },
+              { step: '3', text: '"Add to Home Screen"', icon: '＋' },
+            ].map(s => (
+              <div key={s.step} style={{
+                display:'flex', alignItems:'center', gap: 6,
+                background:'#f5f0e6', borderRadius: 8, padding:'6px 10px',
+                fontSize: 12, color: '#1e2d1c', fontWeight: 500,
+              }}>
+                <span style={{ fontSize: 14 }}>{s.icon}</span>
+                {s.text}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: '#687165', marginTop: 8 }}>
+            💡 Use Safari browser for best experience on iPhone
+          </div>
         </div>
       )}
     </>

@@ -9,6 +9,135 @@ import Pagination              from '../components/Pagination'
 const serif    = { fontFamily: 'Playfair Display, serif' }
 const PER_PAGE = 5
 
+// ── Star Rating Component ─────────────────────────────────────────────────────
+function StarRating({ value, onChange, disabled }) {
+  const [hover, setHover] = useState(0)
+  return (
+    <div style={{ display:'flex', gap:3 }}>
+      {[1,2,3,4,5].map(star => (
+        <span key={star}
+          onClick={() => !disabled && onChange(star)}
+          onMouseEnter={() => !disabled && setHover(star)}
+          onMouseLeave={() => !disabled && setHover(0)}
+          style={{
+            fontSize: 22, cursor: disabled ? 'default' : 'pointer',
+            color: star <= (hover || value) ? '#f5a623' : '#d8cfbc',
+            transition: 'color .1s',
+          }}>★</span>
+      ))}
+    </div>
+  )
+}
+
+// ── Order Rating Section ──────────────────────────────────────────────────────
+function OrderRating({ order, user }) {
+  const [ratings, setRatings]   = useState({})   // { productId: { delivery, quality } }
+  const [saved, setSaved]       = useState({})    // { productId: true }
+  const [loading, setLoading]   = useState(false)
+  const [existing, setExisting] = useState({})    // existing ratings from DB
+
+  useEffect(() => {
+    if (!user || order.status !== 'Delivered') return
+    // Fetch existing ratings for this order
+    supabase.from('ratings').select('product_id, delivery_rating, quality_rating')
+      .eq('order_id', order.id).eq('user_id', user.id)
+      .then(({ data }) => {
+        if (!data) return
+        const ex = {}
+        const rv = {}
+        data.forEach(r => {
+          ex[r.product_id] = true
+          rv[r.product_id] = { delivery: r.delivery_rating, quality: r.quality_rating }
+        })
+        setExisting(ex)
+        setRatings(rv)
+        setSaved(ex)
+      })
+  }, [order.id, user])
+
+  if (order.status !== 'Delivered') return null
+
+  async function submitRating(productId) {
+    setLoading(productId)
+    const { data: { session } } = await supabase.auth.getSession()
+    const r = ratings[productId] || {}
+    await fetch('/api/ratings', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${session?.access_token}` },
+      body: JSON.stringify({
+        order_id: order.id, product_id: productId,
+        delivery_rating: r.delivery || null,
+        quality_rating:  r.quality  || null,
+      }),
+    })
+    setSaved(prev => ({ ...prev, [productId]: true }))
+    setLoading(false)
+  }
+
+  function setRating(productId, type, val) {
+    setRatings(prev => ({
+      ...prev,
+      [productId]: { ...(prev[productId]||{}), [type]: val }
+    }))
+  }
+
+  return (
+    <div style={{ borderTop:'1px solid var(--border)', marginTop:14, paddingTop:14 }}>
+      <div style={{ fontSize:12, fontWeight:600, color:'var(--muted)', textTransform:'uppercase',
+        letterSpacing:1, marginBottom:12 }}>Rate Your Order</div>
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        {(order.items||[]).map((item, i) => {
+          const pid     = item.id || item.product_id || String(i)
+          const isSaved = saved[pid]
+          const r       = ratings[pid] || {}
+          return (
+            <div key={pid} style={{ background:'var(--card)', borderRadius:10,
+              padding:'12px 14px', border:'1px solid var(--border)' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                {item.image_url && (
+                  <img src={item.image_url} alt=""
+                    style={{ width:28, height:28, borderRadius:6, objectFit:'cover' }} />
+                )}
+                <span style={{ fontWeight:600, fontSize:13 }}>
+                  {item.name}{item.selected_option ? ` (${item.selected_option})` : ''}
+                </span>
+                {isSaved && (
+                  <span style={{ fontSize:11, background:'var(--green-pale)', color:'var(--green)',
+                    padding:'2px 8px', borderRadius:8, fontWeight:600, marginLeft:'auto' }}>
+                    ✓ Rated
+                  </span>
+                )}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>🚚 Delivery</div>
+                  <StarRating value={r.delivery||0} disabled={isSaved}
+                    onChange={v => setRating(pid, 'delivery', v)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>🌿 Quality</div>
+                  <StarRating value={r.quality||0} disabled={isSaved}
+                    onChange={v => setRating(pid, 'quality', v)} />
+                </div>
+              </div>
+              {!isSaved && (
+                <button onClick={() => submitRating(pid)}
+                  disabled={!r.delivery && !r.quality || loading === pid}
+                  style={{ fontSize:12, padding:'6px 14px', borderRadius:8, cursor:'pointer',
+                    background: (r.delivery||r.quality) ? 'var(--green)' : 'var(--border)',
+                    color: (r.delivery||r.quality) ? '#fff' : 'var(--muted)',
+                    border:'none', fontWeight:600, transition:'all .15s' }}>
+                  {loading === pid ? 'Saving…' : 'Submit Rating'}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 const STATUS_STEPS = ['Confirmed','Preparing','Out for Delivery','Delivered']
 const STATUS_ICONS = {
   Confirmed:'✅', Preparing:'🌿', 'Out for Delivery':'🚚',
@@ -416,6 +545,9 @@ export default function OrdersPage() {
                           📄 Download Invoice
                         </a>
                       </div>
+
+                      {/* Rating section — only for delivered orders */}
+                      <OrderRating order={order} user={user} />
 
                     </div>
                   )}

@@ -143,15 +143,6 @@ const [settlements, setSettlements] = useState([])
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
     showToast(editing ? '✅ Product updated!' : '✅ Product submitted for approval!')
-     // Notify customers via push if product updated (not new — new goes through approval)
-    if (editing) {
-      const { notifyCustomersOfProduct } = await import('../lib/productNotify')
-      await notifyCustomersOfProduct(
-        { ...payload, id: form.id, name: form.name },
-        false,
-        token
-      )
-    }
     resetForm(); loadProducts(farm.id)
   } catch (e) { showToast('Error: ' + e.message) }
   finally { setSaving(false); setUploading(false) }
@@ -474,7 +465,23 @@ const [settlements, setSettlements] = useState([])
         {/* ── ORDERS TAB ── */}
         {tab === 'orders' && (
           <div>
-            <div style={{ fontWeight:600, fontSize:15, marginBottom:12 }}>My Orders ({orders.length})</div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <div style={{ fontWeight:600, fontSize:15 }}>My Orders ({orders.length})</div>
+              <button onClick={async () => {
+                const { data: { session } } = await supabase.auth.getSession()
+                const res = await fetch('/api/export/farm-orders', {
+                  headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                })
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = 'my-orders.csv'; a.click()
+              }} style={{ fontSize:12, padding:'6px 14px', border:'1.5px solid var(--green)',
+                borderRadius:8, background:'var(--green-pale)', color:'var(--green)',
+                cursor:'pointer', fontWeight:600, display:'flex', alignItems:'center', gap:5 }}>
+                📥 Export CSV
+              </button>
+            </div>
             {orders.length === 0 ? (
               <div className="card" style={{ padding:48, textAlign:'center', color:'var(--muted)' }}>
                 <div style={{ fontSize:36, marginBottom:10 }}>📦</div>

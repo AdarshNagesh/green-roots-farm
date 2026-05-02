@@ -207,13 +207,19 @@ export default function OrdersPage() {
   }, [user])
 
   async function fetchOrders(userId) {
-    setLoading(true)
+  setLoading(true)
+  try {
     const { data } = await supabase.from('orders')
       .select('*').eq('user_id', userId)
       .order('created_at', { ascending:false })
-    setOrders(data||[])
+    setOrders(data || [])
+  } catch(e) {
+    console.error('fetchOrders error:', e)
+    setOrders([])
+  } finally {
     setLoading(false)
   }
+}
 
   const allProductNames = [...new Set(
     orders.flatMap(o => (o.items||[]).map(i => i.name))

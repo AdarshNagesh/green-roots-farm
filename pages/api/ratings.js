@@ -16,7 +16,6 @@ export default async function handler(req, res) {
     const { data, error } = await query
     if (error) return res.status(500).json({ error: error.message })
 
-    // Aggregate per product+farm combination
     const agg = {}
     for (const r of data || []) {
       const key = `${r.product_id}_${r.farm_id || 'none'}`
@@ -59,11 +58,16 @@ export default async function handler(req, res) {
     if (order.status !== 'Delivered')
       return res.status(400).json({ error: 'Can only rate delivered orders' })
 
+    // Use product's farm_id as source of truth
+    const { data: product } = await admin.from('products')
+      .select('farm_id').eq('id', product_id).single()
+    const farmId = product?.farm_id || order.farm_id || null
+
     const { error: upsertErr } = await admin.from('ratings').upsert({
       user_id:         user.id,
       order_id,
       product_id,
-      farm_id:         order.farm_id || null,
+      farm_id:         farmId,
       delivery_rating: delivery_rating || null,
       quality_rating:  quality_rating  || null,
       updated_at:      new Date().toISOString(),

@@ -162,7 +162,7 @@ export default function App({ Component, pageProps }) {
           </div>
           <div style={{ display:'flex', gap: 8, marginTop: 10, flexWrap:'wrap' }}>
             {[
-              {[
+              
               { step: '1', text: 'Tap Share ⬆️ at bottom of Safari', icon: '1️⃣' },
               { step: '2', text: 'Scroll & tap "Add to Home Screen"', icon: '2️⃣' },
               { step: '3', text: 'Tap "Add" at top right', icon: '3️⃣' },

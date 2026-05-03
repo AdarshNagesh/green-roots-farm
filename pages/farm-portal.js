@@ -41,6 +41,14 @@ export default function FarmPortal() {
   const [cancelReason, setCancelReason] = useState('')
   const [loading, setLoading]   = useState(true)
 const [settlements, setSettlements] = useState([])
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data:{ session } }) => {
       const u = session?.user ?? null
@@ -234,41 +242,43 @@ const [settlements, setSettlements] = useState([])
       <Head><title>{farm?.name || 'Farm Portal'} — Manager</title></Head>
 
       {/* Header */}
-      <div style={{ background:'var(--card)', borderBottom:'1px solid var(--border)', padding:'14px 24px',
-        display:'flex', justifyContent:'space-between', alignItems:'center', fontFamily:'DM Sans, sans-serif' }}>
+      <div style={{ background:'var(--green)', padding:'0 24px',
+        display:'flex', justifyContent:'space-between', alignItems:'center',
+        fontFamily:'DM Sans, sans-serif', minHeight:56 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <span style={{ fontSize:22 }}>🌿</span>
+          <span style={{ fontSize:20 }}>🌿</span>
           <div>
-            <div style={{ ...serif, fontSize:16, fontWeight:700, color:'var(--green)' }}>{farm?.name}</div>
-            <div style={{ fontSize:11, color:'var(--muted)' }}>Farm Portal</div>
+            <div style={{ fontSize:15, fontWeight:700, color:'#fff' }}>{farm?.name}</div>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.7)', textTransform:'uppercase', letterSpacing:1 }}>Farm Portal</div>
           </div>
         </div>
-        <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-          <span style={{ fontSize:13, color:'var(--muted)' }}>{user?.email}</span>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           <button onClick={() => router.push('/?portal=1')}
-            style={{ fontSize:12, padding:'6px 14px', border:'1px solid var(--border)',
-              borderRadius:8, background:'transparent', cursor:'pointer' }}>🛒 View Shop</button>
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/?portal=1')}}
-            style={{ fontSize:12, padding:'6px 14px', border:'1px solid var(--border)',
-              borderRadius:8, background:'transparent', cursor:'pointer', color:'var(--muted)' }}>Logout</button>
+            style={{ fontSize:12, padding:'7px 14px', border:'1.5px solid rgba(255,255,255,0.4)',
+              borderRadius:8, background:'transparent', cursor:'pointer', color:'#fff', fontWeight:500 }}>
+            🛒 Shop
+          </button>
+          <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }}
+            style={{ fontSize:12, padding:'7px 14px', border:'1.5px solid rgba(255,255,255,0.4)',
+              borderRadius:8, background:'rgba(255,255,255,0.15)', cursor:'pointer', color:'#fff' }}>
+            Logout
+          </button>
         </div>
       </div>
 
-      <main style={{ maxWidth:1120, margin:'0 auto', padding:'28px 20px', fontFamily:'DM Sans, sans-serif' }}>
+      <main style={{ maxWidth:1120, margin:'0 auto', padding: isMobile ? '16px 14px' : '28px 20px', fontFamily:'DM Sans, sans-serif' }}>
 
         {/* Stats */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:24 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:24 }}>
           {[
-            { label:'My Products', value: products.length, icon:'🌿' },
-            { label:'Total Orders', value: orders.length, icon:'📦' },
-            { label:'Revenue', value: '₹' + revenue.toLocaleString('en-IN'), icon:'💰' },
+            { label:'My Products', value: products.length, icon:'🌿', color:'var(--green)' },
+            { label:'Total Orders', value: orders.length, icon:'📦', color:'var(--green)' },
+            { label:'Revenue', value: '₹' + revenue.toLocaleString('en-IN'), icon:'💰', color:'var(--green)' },
           ].map(s => (
-            <div key={s.label} className="card" style={{ padding:'16px 18px', display:'flex', alignItems:'center', gap:12 }}>
-              <span style={{ fontSize:26 }}>{s.icon}</span>
-              <div>
-                <div style={{ fontSize:20, fontWeight:700, color:'var(--green)' }}>{s.value}</div>
-                <div style={{ fontSize:12, color:'var(--muted)' }}>{s.label}</div>
-              </div>
+            <div key={s.label} className="card" style={{ padding: isMobile ? '14px 10px' : '20px 16px', textAlign:'center' }}>
+              <div style={{ fontSize: isMobile ? 22 : 28, marginBottom:4 }}>{s.icon}</div>
+              <div style={{ fontSize: isMobile ? 16 : 22, fontWeight:700, color:s.color, marginBottom:2 }}>{s.value}</div>
+              <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:0.5, lineHeight:1.3 }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -284,7 +294,7 @@ const [settlements, setSettlements] = useState([])
 
         {/* ── PRODUCTS TAB ── */}
         {tab === 'products' && (
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 400px', gap:24, alignItems:'start' }}>
+          <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', gap:24, alignItems:'start' }}>
             <div>
               <div style={{ fontWeight:600, fontSize:15, marginBottom:12 }}>Products ({products.length})</div>
               {products.length === 0 ? (
@@ -329,7 +339,7 @@ const [settlements, setSettlements] = useState([])
             </div>
 
             {/* Product Form */}
-            <div className="card" style={{ padding:22, position:'sticky', top:80, maxHeight:'calc(100vh - 100px)', overflowY:'auto' }}>
+            <div className="card" style={{ padding:22, position: isMobile ? 'static' : 'sticky', top:80, maxHeight: isMobile ? 'none' : 'calc(100vh - 100px)', overflowY: isMobile ? 'visible' : 'auto' }}>
               <div style={{ fontWeight:700, fontSize:16, color:'var(--green)', marginBottom:18 }}>
                 {editing ? '✏️ Edit Product' : '＋ Add New Product'}
               </div>
@@ -408,6 +418,10 @@ const [settlements, setSettlements] = useState([])
                     style={{ width:15, height:15, accentColor:'var(--green)' }} />
                   Visible on shop
                 </label>
+              </div>
+              <div style={{ marginBottom:14, padding:'10px 12px', background:'var(--gold-pale)',
+                borderRadius:8, fontSize:12, color:'var(--gold)' }}>
+                ⏳ New products need admin approval before appearing in the shop.
               </div>
 
               {/* Size options */}

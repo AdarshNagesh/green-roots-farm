@@ -60,6 +60,13 @@ const [ordersHasMore, setOrdersHasMore] = useState(false)
   const [custPage, setCustPage]   = useState(1)
 const [rejectModal, setRejectModal]   = useState(null)
 const [rejectReason, setRejectReason] = useState('')
+const [isMobile, setIsMobile] = useState(false)
+useEffect(() => {
+  const check = () => setIsMobile(window.innerWidth < 768)
+  check()
+  window.addEventListener('resize', check)
+  return () => window.removeEventListener('resize', check)
+}, [])
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session } }) => {
       const u = session?.user ?? null
@@ -192,33 +199,10 @@ async function saveSettings() {
       if(error) throw error
       showToast(editing?'✅ Updated — customers notified!':'✅ Added — customers notified!')
       if (!editing || form.notifyCustomers) {
-        const { data: { session } } = await supabase.auth.getSession()
       await notifyCustomersOfProduct(
         { ...payload, min_order_value: form.min_order_value==='' ? null : parseFloat(form.min_order_value),emoji: form.emoji || '🌿', name: form.name },
-        !editing,
-        session?.access_token
+        !editing
       )
-        // Notify waitlisted customers if product came back in stock
-      if (editing && (payload.in_stock === true || (payload.stock_quantity > 0))) {
-        const { data: waitlisted } = await supabase
-          .from('waitlist').select('id').eq('product_id', form.id).limit(1)
-        if (waitlisted?.length) {
-         
-          await fetch('/api/notify/waitlist-notify', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token}`,
-            },
-            body: JSON.stringify({
-              product_id:    form.id,
-              product_name:  form.name,
-              product_price: form.price,
-              product_unit:  form.unit,
-            }),
-          })
-        }
-      }
       }
       resetForm(); loadAll()
     } catch(e) { showToast('Error: '+e.message) }
@@ -342,7 +326,7 @@ async function saveSettings() {
 
         {/* ── PRODUCTS TAB ── */}
         {tab==='products' && (
-          <div style={{display:'grid',gridTemplateColumns:'1fr 400px',gap:24,alignItems:'start'}}>
+          <div style={{display:'grid',gridTemplateColumns: isMobile ? '1fr' : '1fr 400px',gap:24,alignItems:'start'}}>
             <div>
               <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>Inventory ({products.length})</div>
               {products.length===0
@@ -391,21 +375,8 @@ async function saveSettings() {
       type: 'admin',
     })
   }
-  // Push to farm owner
-  const token = await getToken()
-  await fetch('/api/notify/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({
-      user_id: farm.owner_id,
-      title:   'Adarshini Farm 🌿',
-      body:    `✅ Your product "${p.name}" has been approved and is now live!`,
-      url:     '/farm-portal',
-      tag:     'product-approved-' + p.id,
-    }),
-  })                              
   // Email farm owner
- 
+  const token = await getToken()
   await fetch('/api/notify/product-decision', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -437,7 +408,7 @@ async function saveSettings() {
             </div>
 
             {/* Add/Edit Form */}
-            <div className="card" style={{padding:22,position:'sticky',top:80,maxHeight:'calc(100vh - 100px)',overflowY:'auto'}}>
+            <div className="card" style={{padding:22,position: isMobile ? 'static' : 'sticky',top:80,maxHeight: isMobile ? 'none' : 'calc(100vh - 100px)',overflowY: isMobile ? 'visible' : 'auto'}}>
               <div style={{fontWeight:700,fontSize:16,color:'var(--green)',marginBottom:18}}>
                 {editing?'✏️ Edit Product':'＋ Add New Product'}
               </div>
@@ -665,7 +636,7 @@ async function saveSettings() {
                   </button>
                 )}
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr 1fr',gap:10}}>
+              <div style={{display:'grid',gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr 1fr 1fr',gap:10}}>
                 <div>
                   <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:0.5}}>Customer</div>
                   <input className="inp" style={{padding:'7px 10px',fontSize:13}}
@@ -931,7 +902,7 @@ async function saveSettings() {
     🚚 Delivery Fee Settings
   </div>
 
-  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:18}}>
+  <div style={{display:'grid',gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',gap:16,marginBottom:18}}>
     <div>
       <div style={{fontSize:12,color:'var(--muted)',fontWeight:600,marginBottom:6,
         textTransform:'uppercase',letterSpacing:0.5}}>Base Fee (₹)</div>
@@ -1111,23 +1082,8 @@ async function saveSettings() {
                 type: 'admin',
               })
             }
-             const token = await getToken()
-            // Push to farm owner
-            if (farm?.owner_id) {
-              await fetch('/api/notify/push', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                  user_id: farm.owner_id,
-                  title:   'Adarshini Farm 🌿',
-                  body:    `❌ Your product "${rejectModal.name}" was not approved.${rejectReason ? ' Reason: ' + rejectReason : ''}`,
-                  url:     '/farm-portal',
-                  tag:     'product-rejected-' + rejectModal.id,
-                }),
-              })
-            }
             // Email farm owner
-           
+            const token = await getToken()
             await fetch('/api/notify/product-decision', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

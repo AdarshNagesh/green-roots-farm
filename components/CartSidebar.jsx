@@ -680,11 +680,14 @@ onClearCart(); setStep('done')
             </div>
           )}
 
-          <button className="btn-g" style={{ width:'100%', padding:13, fontSize:15, marginBottom:8 }}
-            disabled={loading}
-           onClick={payMode==='cod' ? handleCOD : handleRazorpay}>
-{loading ? 'Processing…' : payMode==='cod' ? '✓ Place Order (COD)' : `🔒 Pay ₹${grandTotal.toFixed(2)} Online`}
-          </button>
+         <button className="btn-g" style={{ width:'100%', padding:13, fontSize:15, marginBottom:8,
+  opacity: (deliveryType === 'delivery' && (!feeResult || feeResult.error)) ? 0.4 : 1,
+  cursor: (deliveryType === 'delivery' && (!feeResult || feeResult.error)) ? 'not-allowed' : 'pointer',
+}}
+  disabled={loading || (deliveryType === 'delivery' && (!feeResult || feeResult.error))}
+  onClick={payMode==='cod' ? handleCOD : handleRazorpay}>
+  {loading ? 'Processing…' : payMode==='cod' ? '✓ Place Order (COD)' : `🔒 Pay ₹${grandTotal.toFixed(2)} Online`}
+</button>
           <button className="btn-o" style={{ width:'100%', padding:10 }}
             onClick={() => setStep('cart')}>Back to Cart</button>
         </div>}

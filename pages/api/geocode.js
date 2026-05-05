@@ -58,11 +58,15 @@ export default async function handler(req, res) {
 
     // ✅ 1. Check cache
     try {
-      const { data: cached, error } = await admin
-        .from('geocode_cache')
-        .select('lat, lng, formatted')
-        .eq('address_key', cacheKey)
-        .maybeSingle()
+      const ttlDays = 90 // cache valid for 90 days
+const cutoff = new Date(Date.now() - ttlDays * 24 * 60 * 60 * 1000).toISOString()
+
+const { data: cached, error } = await admin
+  .from('geocode_cache')
+  .select('lat, lng, formatted')
+  .eq('address_key', cacheKey)
+  .gte('created_at', cutoff)  // only use if less than 90 days old
+  .maybeSingle()
 
       if (!error && cached) {
         return res.status(200).json({
@@ -108,18 +112,19 @@ export default async function handler(req, res) {
 
     // ✅ 3. Save to cache (FIXED)
     try {
-      await admin
-        .from('geocode_cache')
-        .upsert({
-          address_key: cacheKey,
-          lat,
-          lng,
-          formatted
-        })
-    } catch (e) {
-      console.error('Cache write failed:', e)
-      // do NOT fail request because of cache
-    }
+  await admin
+    .from('geocode_cache')
+    .upsert({
+      address_key: cacheKey,
+      lat,
+      lng,
+      formatted,
+      created_at: new Date().toISOString()
+    })
+} catch (e) {
+  console.error('Cache write failed:', e)
+  // do NOT fail request because of cache
+}
 
     // ✅ 4. Return success
     return res.status(200).json({
